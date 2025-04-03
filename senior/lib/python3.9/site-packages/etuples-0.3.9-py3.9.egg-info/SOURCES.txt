@@ -1,0 +1,15 @@
+LICENSE
+MANIFEST.in
+README.md
+setup.cfg
+setup.py
+versioneer.py
+etuples/__init__.py
+etuples/_version.py
+etuples/core.py
+etuples/dispatch.py
+etuples.egg-info/PKG-INFO
+etuples.egg-info/SOURCES.txt
+etuples.egg-info/dependency_links.txt
+etuples.egg-info/requires.txt
+etuples.egg-info/top_level.txt

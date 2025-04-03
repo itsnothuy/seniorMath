@@ -1,0 +1,15 @@
+LICENSE.txt
+MANIFEST.in
+README.md
+setup.cfg
+setup.py
+versioneer.py
+cons/__init__.py
+cons/_version.py
+cons/core.py
+cons/unify.py
+cons.egg-info/PKG-INFO
+cons.egg-info/SOURCES.txt
+cons.egg-info/dependency_links.txt
+cons.egg-info/requires.txt
+cons.egg-info/top_level.txt
