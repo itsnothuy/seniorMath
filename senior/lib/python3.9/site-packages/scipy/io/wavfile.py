@@ -658,8 +658,9 @@ def read(filename, mmap=False):
                 if data_chunk_received:
                     # End of file but data successfully read
                     warnings.warn(
-                        f"Reached EOF prematurely; finished at {fid.tell():d} bytes, "
-                        f"expected {file_size:d} bytes from header.",
+                        "Reached EOF prematurely; finished at {:d} bytes, "
+                        "expected {:d} bytes from header."
+                        .format(fid.tell(), file_size),
                         WavFileWarning, stacklevel=2)
                     break
                 else:
@@ -752,7 +753,6 @@ def write(filename, rate, data):
     Write to 16-bit PCM, Mono.
 
     >>> from scipy.io.wavfile import write
-    >>> import numpy as np
     >>> samplerate = 44100; fs = 100
     >>> t = np.linspace(0., 1., samplerate)
     >>> amplitude = np.iinfo(np.int16).max
@@ -769,9 +769,8 @@ def write(filename, rate, data):
 
     try:
         dkind = data.dtype.kind
-        allowed_dtypes = ['float32', 'float64',
-                          'uint8', 'int16', 'int32', 'int64']
-        if data.dtype.name not in allowed_dtypes:
+        if not (dkind == 'i' or dkind == 'f' or (dkind == 'u' and
+                                                 data.dtype.itemsize == 1)):
             raise ValueError("Unsupported data type '%s'" % data.dtype)
 
         header_data = b''

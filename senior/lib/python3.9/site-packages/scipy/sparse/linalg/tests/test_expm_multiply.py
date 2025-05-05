@@ -13,15 +13,14 @@ from scipy.sparse.linalg import expm as sp_expm
 from scipy.sparse.linalg._expm_multiply import (_theta, _compute_p_max,
         _onenormest_matrix_power, expm_multiply, _expm_multiply_simple,
         _expm_multiply_interval)
-from scipy._lib._util import np_long
 
 
 IMPRECISE = {np.single, np.csingle}
-REAL_DTYPES = {np.intc, np_long, np.longlong,
-               np.float32, np.float64, np.longdouble}
-COMPLEX_DTYPES = {np.complex64, np.complex128, np.clongdouble}
-# use sorted list to ensure fixed order of tests
-DTYPES = sorted(REAL_DTYPES ^ COMPLEX_DTYPES, key=str)
+REAL_DTYPES = {np.intc, np.int_, np.longlong,
+               np.single, np.double, np.longdouble}
+COMPLEX_DTYPES = {np.csingle, np.cdouble, np.clongdouble}
+# use sorted tuple to ensure fixed order of tests
+DTYPES = tuple(sorted(REAL_DTYPES ^ COMPLEX_DTYPES, key=str))
 
 
 def estimated(func):
@@ -309,7 +308,7 @@ class TestExpmActionInterval:
 @pytest.mark.parametrize("b_is_matrix", [False, True])
 def test_expm_multiply_dtype(dtype_a, dtype_b, b_is_matrix):
     """Make sure `expm_multiply` handles all numerical dtypes correctly."""
-    assert_allclose_ = (partial(assert_allclose, rtol=1.2e-3, atol=1e-5)
+    assert_allclose_ = (partial(assert_allclose, rtol=1e-3, atol=1e-5)
                         if {dtype_a, dtype_b} & IMPRECISE else assert_allclose)
     rng = np.random.default_rng(1234)
     # test data

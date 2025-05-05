@@ -2,7 +2,7 @@ import pickle
 import pytest
 import numpy as np
 from numpy.linalg import LinAlgError
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_array_equal
 from scipy.stats.qmc import Halton
 from scipy.spatial import cKDTree
 from scipy.interpolate._rbfinterp import (
@@ -47,7 +47,7 @@ def _is_conditionally_positive_definite(kernel, m):
     ntests = 100
     for ndim in [1, 2, 3, 4, 5]:
         # Generate sample points with a Halton sequence to avoid samples that
-        # are too close to each other, which can make the matrix singular.
+        # are too close to eachother, which can make the matrix singular.
         seq = Halton(ndim, scramble=False, seed=np.random.RandomState())
         for _ in range(ntests):
             x = 2*seq.random(nx) - 1
@@ -155,7 +155,7 @@ class _TestRBFInterpolator:
         assert_allclose(yitp1, yitp2, atol=1e-8)
 
     @pytest.mark.slow
-    def test_chunking(self, monkeypatch):
+    def test_chunking(self):
         # If the observed data comes from a polynomial, then the interpolant
         # should be able to reproduce the polynomial exactly, provided that
         # `degree` is sufficiently high.
@@ -163,7 +163,7 @@ class _TestRBFInterpolator:
         seq = Halton(2, scramble=False, seed=rng)
         degree = 3
 
-        largeN = 1000 + 33
+        largeN = 1000000 + 33
         # this is large to check that chunking of the RBFInterpolator is tested
         x = seq.random(50)
         xitp = seq.random(largeN)
@@ -175,15 +175,8 @@ class _TestRBFInterpolator:
 
         y = P.dot(poly_coeffs)
         yitp1 = Pitp.dot(poly_coeffs)
-        interp = self.build(x, y, degree=degree)
-        ce_real = interp._chunk_evaluator
+        yitp2 = self.build(x, y, degree=degree)(xitp)
 
-        def _chunk_evaluator(*args, **kwargs):
-            kwargs.update(memory_budget=100)
-            return ce_real(*args, **kwargs)
-
-        monkeypatch.setattr(interp, '_chunk_evaluator', _chunk_evaluator)
-        yitp2 = interp(xitp)
         assert_allclose(yitp1, yitp2, atol=1e-8)
 
     def test_vector_data(self):
@@ -369,18 +362,9 @@ class _TestRBFInterpolator:
         y = np.linspace(0, 1, 5)[:, None]
         d = np.zeros(5)
         for kernel, deg in _NAME_TO_MIN_DEGREE.items():
-            # Only test for kernels that its minimum degree is not 0.
-            if deg >= 1:
-                match = f'`degree` should not be below {deg}'
-                with pytest.warns(Warning, match=match):
-                    self.build(y, d, epsilon=1.0, kernel=kernel, degree=deg-1)
-
-    def test_minus_one_degree(self):
-        # Make sure a degree of -1 is accepted without any warning.
-        y = np.linspace(0, 1, 5)[:, None]
-        d = np.zeros(5)
-        for kernel, _ in _NAME_TO_MIN_DEGREE.items():
-            self.build(y, d, epsilon=1.0, kernel=kernel, degree=-1)
+            match = f'`degree` should not be below {deg}'
+            with pytest.warns(Warning, match=match):
+                self.build(y, d, epsilon=1.0, kernel=kernel, degree=deg-1)
 
     def test_rank_error(self):
         # An error should be raised when `kernel` is "thin_plate_spline" and
@@ -415,7 +399,7 @@ class _TestRBFInterpolator:
         yitp1 = interp(xitp)
         yitp2 = pickle.loads(pickle.dumps(interp))(xitp)
 
-        assert_allclose(yitp1, yitp2, atol=1e-16)
+        assert_array_equal(yitp1, yitp2)
 
 
 class TestRBFInterpolatorNeighborsNone(_TestRBFInterpolator):

@@ -68,7 +68,7 @@ Tensor product polynomials:
    :toctree: generated/
 
    NdPPoly
-   NdBSpline
+
 
 1-D Splines
 ===========
@@ -79,7 +79,6 @@ Tensor product polynomials:
    BSpline
    make_interp_spline
    make_lsq_spline
-   make_smoothing_spline
 
 Functional interface to FITPACK routines:
 
@@ -185,8 +184,6 @@ from ._bsplines import *
 from ._pade import *
 
 from ._rgi import *
-
-from ._ndbspline import NdBSpline
 
 # Deprecated namespaces, to be removed in v2.0.0
 from . import fitpack, fitpack2, interpolate, ndgriddata, polyint, rbf

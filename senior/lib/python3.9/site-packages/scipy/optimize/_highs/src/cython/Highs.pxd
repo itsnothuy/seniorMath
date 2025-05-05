@@ -1,3 +1,4 @@
+# distutils: language=c++
 # cython: language_level=3
 
 from libc.stdio cimport FILE
@@ -52,5 +53,3 @@ cdef extern from "Highs.h":
         HighsStatus setHighsOptionValueDbl "setOptionValue" (const string & option, const double value)
 
         string primalDualStatusToString(const int primal_dual_status)
-
-        void resetGlobalScheduler(bool blocking)

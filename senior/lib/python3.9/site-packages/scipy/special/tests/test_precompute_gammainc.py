@@ -1,3 +1,4 @@
+import numpy as np  # np is actually used, in the decorators below.
 import pytest
 
 from scipy.special._testutils import MissingModule, check_version

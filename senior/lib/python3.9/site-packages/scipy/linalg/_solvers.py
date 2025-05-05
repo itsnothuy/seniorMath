@@ -66,7 +66,6 @@ def solve_sylvester(a, b, q):
     --------
     Given `a`, `b`, and `q` solve for `x`:
 
-    >>> import numpy as np
     >>> from scipy import linalg
     >>> a = np.array([[-3, -2, 0], [-1, -1, 3], [3, -5, -1]])
     >>> b = np.array([[1]])
@@ -142,7 +141,6 @@ def solve_continuous_lyapunov(a, q):
     --------
     Given `a` and `q` solve for `x`:
 
-    >>> import numpy as np
     >>> from scipy import linalg
     >>> a = np.array([[-3, -2, 0], [-1, -1, 0], [0, -5, -1]])
     >>> b = np.array([2, 4, -1])
@@ -186,13 +184,14 @@ def solve_continuous_lyapunov(a, q):
 
     if info < 0:
         raise ValueError('?TRSYL exited with the internal error '
-                         f'"illegal value in argument number {-info}.". See '
-                         'LAPACK documentation for the ?TRSYL error codes.')
+                         '"illegal value in argument number {}.". See '
+                         'LAPACK documentation for the ?TRSYL error codes.'
+                         ''.format(-info))
     elif info == 1:
         warnings.warn('Input "a" has an eigenvalue pair whose sum is '
                       'very close to or exactly zero. The solution is '
                       'obtained via perturbing the coefficients.',
-                      RuntimeWarning, stacklevel=2)
+                      RuntimeWarning)
     y *= scale
 
     return u.dot(y).dot(u.conj().T)
@@ -291,7 +290,6 @@ def solve_discrete_lyapunov(a, q, method=None):
     --------
     Given `a` and `q` solve for `x`:
 
-    >>> import numpy as np
     >>> from scipy import linalg
     >>> a = np.array([[0.2, 0.5],[0.7, -0.9]])
     >>> q = np.eye(2)
@@ -428,7 +426,6 @@ def solve_continuous_are(a, b, q, r, e=None, s=None, balanced=True):
     --------
     Given `a`, `b`, `q`, and `r` solve for `x`:
 
-    >>> import numpy as np
     >>> from scipy import linalg
     >>> a = np.array([[4, 3], [-4.5, -3.5]])
     >>> b = np.array([[1], [-1]])
@@ -467,7 +464,7 @@ def solve_continuous_are(a, b, q, r, e=None, s=None, balanced=True):
         # xGEBAL does not remove the diagonals before scaling. Also
         # to avoid destroying the Symplectic structure, we follow Ref.3
         M = np.abs(H) + np.abs(J)
-        np.fill_diagonal(M, 0.)
+        M[np.diag_indices_from(M)] = 0.
         _, (sca, _) = matrix_balance(M, separate=1, permute=0)
         # do we need to bother?
         if not np.allclose(sca, np.ones_like(sca)):
@@ -634,7 +631,6 @@ def solve_discrete_are(a, b, q, r, e=None, s=None, balanced=True):
     --------
     Given `a`, `b`, `q`, and `r` solve for `x`:
 
-    >>> import numpy as np
     >>> from scipy import linalg as la
     >>> a = np.array([[0, 1], [0, -1]])
     >>> b = np.array([[1, 0], [2, 1]])
@@ -673,7 +669,7 @@ def solve_discrete_are(a, b, q, r, e=None, s=None, balanced=True):
         # xGEBAL does not remove the diagonals before scaling. Also
         # to avoid destroying the Symplectic structure, we follow Ref.3
         M = np.abs(H) + np.abs(J)
-        np.fill_diagonal(M, 0.)
+        M[np.diag_indices_from(M)] = 0.
         _, (sca, _) = matrix_balance(M, separate=1, permute=0)
         # do we need to bother?
         if not np.allclose(sca, np.ones_like(sca)):
@@ -732,7 +728,7 @@ def solve_discrete_are(a, b, q, r, e=None, s=None, balanced=True):
     sym_threshold = np.max([np.spacing(1000.), 0.1*n_u_sym])
 
     if norm(u_sym, 1) > sym_threshold:
-        raise LinAlgError('The associated symplectic pencil has eigenvalues '
+        raise LinAlgError('The associated symplectic pencil has eigenvalues'
                           'too close to the unit circle')
 
     return (x + x.conj().T)/2
@@ -777,7 +773,7 @@ def _are_validate_args(a, b, q, r, e, s, eq_type='care'):
 
     """
 
-    if eq_type.lower() not in ("dare", "care"):
+    if not eq_type.lower() in ('dare', 'care'):
         raise ValueError("Equation type unknown. "
                          "Only 'care' and 'dare' is understood")
 

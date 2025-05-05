@@ -8,19 +8,18 @@ Sparse matrix functions
 #          Jake Vanderplas, August 2012 (Sparse Updates)
 #
 
-__all__ = ['expm', 'inv', 'matrix_power']
+__all__ = ['expm', 'inv']
 
 import numpy as np
 from scipy.linalg._basic import solve, solve_triangular
 
-from scipy.sparse._base import issparse
+from scipy.sparse._base import isspmatrix
 from scipy.sparse.linalg import spsolve
-from scipy.sparse._sputils import is_pydata_spmatrix, isintlike
+from scipy.sparse._sputils import is_pydata_spmatrix
 
 import scipy.sparse
 import scipy.sparse.linalg
 from scipy.sparse.linalg._interface import LinearOperator
-from scipy.sparse._construct import eye
 
 from ._expm_multiply import _ident_like, _exact_1_norm as _onenorm
 
@@ -68,7 +67,7 @@ def inv(A):
 
     """
     # Check input
-    if not (scipy.sparse.issparse(A) or is_pydata_spmatrix(A)):
+    if not (scipy.sparse.isspmatrix(A) or is_pydata_spmatrix(A)):
         raise TypeError('Input must be a sparse matrix')
 
     # Use sparse direct solver to solve "AX = I" accurately
@@ -112,7 +111,7 @@ def _onenorm_matrix_power_nnm(A, p):
 
 def _is_upper_triangular(A):
     # This function could possibly be of wider interest.
-    if issparse(A):
+    if isspmatrix(A):
         lower_part = scipy.sparse.tril(A, -1)
         # Check structural upper triangularity,
         # then coincidental upper triangularity if needed.
@@ -153,7 +152,7 @@ def _smart_matrix_product(A, B, alpha=None, structure=None):
         raise ValueError('expected B to be a rectangular matrix')
     f = None
     if structure == UPPER_TRIANGULAR:
-        if (not issparse(A) and not issparse(B)
+        if (not isspmatrix(A) and not isspmatrix(B)
                 and not is_pydata_spmatrix(A) and not is_pydata_spmatrix(B)):
             f, = scipy.linalg.get_blas_funcs(('trmm',), (A, B))
     if f is not None:
@@ -226,7 +225,7 @@ class ProductOperator(LinearOperator):
                                 'must all have the same shape.')
             self.shape = (n, n)
             self.ndim = len(self.shape)
-        self.dtype = np.result_type(*[x.dtype for x in args])
+        self.dtype = np.find_common_type([x.dtype for x in args], [])
         self._operator_sequence = args
 
     def _matvec(self, x):
@@ -605,7 +604,7 @@ def _expm(A, use_exact_onenorm):
     # carefully handling sparse scenario
     if A.shape == (0, 0):
         out = np.zeros([0, 0], dtype=A.dtype)
-        if issparse(A) or is_pydata_spmatrix(A):
+        if isspmatrix(A) or is_pydata_spmatrix(A):
             return A.__class__(out)
         return out
 
@@ -615,13 +614,13 @@ def _expm(A, use_exact_onenorm):
 
         # Avoid indiscriminate casting to ndarray to
         # allow for sparse or other strange arrays
-        if issparse(A) or is_pydata_spmatrix(A):
+        if isspmatrix(A) or is_pydata_spmatrix(A):
             return A.__class__(out)
 
         return np.array(out)
 
     # Ensure input is of float type, to avoid integer overflows etc.
-    if ((isinstance(A, np.ndarray) or issparse(A) or is_pydata_spmatrix(A))
+    if ((isinstance(A, np.ndarray) or isspmatrix(A) or is_pydata_spmatrix(A))
             and not np.issubdtype(A.dtype, np.inexact)):
         A = A.astype(float)
 
@@ -703,7 +702,7 @@ def _solve_P_Q(U, V, structure=None):
     """
     P = U + V
     Q = -U + V
-    if issparse(U) or is_pydata_spmatrix(U):
+    if isspmatrix(U) or is_pydata_spmatrix(U):
         return spsolve(Q, P)
     elif structure is None:
         return solve(Q, P)
@@ -862,79 +861,3 @@ def _ell(A, m):
     log2_alpha_div_u = np.log2(alpha/u)
     value = int(np.ceil(log2_alpha_div_u / (2 * m)))
     return max(value, 0)
-
-def matrix_power(A, power):
-    """
-    Raise a square matrix to the integer power, `power`.
-
-    For non-negative integers, ``A**power`` is computed using repeated
-    matrix multiplications. Negative integers are not supported. 
-
-    Parameters
-    ----------
-    A : (M, M) square sparse array or matrix
-        sparse array that will be raised to power `power`
-    power : int
-        Exponent used to raise sparse array `A`
-
-    Returns
-    -------
-    A**power : (M, M) sparse array or matrix
-        The output matrix will be the same shape as A, and will preserve
-        the class of A, but the format of the output may be changed.
-    
-    Notes
-    -----
-    This uses a recursive implementation of the matrix power. For computing
-    the matrix power using a reasonably large `power`, this may be less efficient
-    than computing the product directly, using A @ A @ ... @ A.
-    This is contingent upon the number of nonzero entries in the matrix. 
-
-    .. versionadded:: 1.12.0
-
-    Examples
-    --------
-    >>> from scipy import sparse
-    >>> A = sparse.csc_array([[0,1,0],[1,0,1],[0,1,0]])
-    >>> A.todense()
-    array([[0, 1, 0],
-           [1, 0, 1],
-           [0, 1, 0]])
-    >>> (A @ A).todense()
-    array([[1, 0, 1],
-           [0, 2, 0],
-           [1, 0, 1]])
-    >>> A2 = sparse.linalg.matrix_power(A, 2)
-    >>> A2.todense()
-    array([[1, 0, 1],
-           [0, 2, 0],
-           [1, 0, 1]])
-    >>> A4 = sparse.linalg.matrix_power(A, 4)
-    >>> A4.todense()
-    array([[2, 0, 2],
-           [0, 4, 0],
-           [2, 0, 2]])
-
-    """
-    M, N = A.shape
-    if M != N:
-        raise TypeError('sparse matrix is not square')
-
-    if isintlike(power):
-        power = int(power)
-        if power < 0:
-            raise ValueError('exponent must be >= 0')
-
-        if power == 0:
-            return eye(M, dtype=A.dtype)
-
-        if power == 1:
-            return A.copy()
-
-        tmp = matrix_power(A, power // 2)
-        if power % 2:
-            return A @ tmp @ tmp
-        else:
-            return tmp @ tmp
-    else:
-        raise ValueError("exponent must be an integer")

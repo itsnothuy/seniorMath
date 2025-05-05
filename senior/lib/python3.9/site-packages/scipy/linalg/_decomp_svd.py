@@ -72,9 +72,9 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import linalg
-    >>> rng = np.random.default_rng()
+    >>> from numpy.random import default_rng
+    >>> rng = default_rng()
     >>> m, n = 9, 6
     >>> a = rng.standard_normal((m, n)) + 1.j*rng.standard_normal((m, n))
     >>> U, s, Vh = linalg.svd(a)
@@ -114,22 +114,8 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False,
     if not isinstance(lapack_driver, str):
         raise TypeError('lapack_driver must be a string')
     if lapack_driver not in ('gesdd', 'gesvd'):
-        message = f'lapack_driver must be "gesdd" or "gesvd", not "{lapack_driver}"'
-        raise ValueError(message)
-
-    if lapack_driver == 'gesdd' and compute_uv:
-        # XXX: revisit int32 when ILP64 lapack becomes a thing
-        max_mn, min_mn = (m, n) if m > n else (n, m)
-        if full_matrices:
-            if max_mn*max_mn > numpy.iinfo(numpy.int32).max:
-                raise ValueError(f"Indexing a matrix size {max_mn} x {max_mn} "
-                                  " would incur integer overflow in LAPACK.")
-        else:
-            sz = max(m * min_mn, n * min_mn)
-            if max(m * min_mn, n * min_mn) > numpy.iinfo(numpy.int32).max:
-                raise ValueError(f"Indexing a matrix of {sz} elements would "
-                                  "incur an in integer overflow in LAPACK.")
-
+        raise ValueError('lapack_driver must be "gesdd" or "gesvd", not "%s"'
+                         % (lapack_driver,))
     funcs = (lapack_driver, lapack_driver + '_lwork')
     gesXd, gesXd_lwork = get_lapack_funcs(funcs, (a1,), ilp64='preferred')
 
@@ -178,26 +164,24 @@ def svdvals(a, overwrite_a=False, check_finite=True):
     LinAlgError
         If SVD computation does not converge.
 
-    See Also
-    --------
-    svd : Compute the full singular value decomposition of a matrix.
-    diagsvd : Construct the Sigma matrix, given the vector s.
-
     Notes
     -----
     ``svdvals(a)`` only differs from ``svd(a, compute_uv=False)`` by its
     handling of the edge case of empty ``a``, where it returns an
     empty sequence:
 
-    >>> import numpy as np
     >>> a = np.empty((0, 2))
     >>> from scipy.linalg import svdvals
     >>> svdvals(a)
     array([], dtype=float64)
 
+    See Also
+    --------
+    svd : Compute the full singular value decomposition of a matrix.
+    diagsvd : Construct the Sigma matrix, given the vector s.
+
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.linalg import svdvals
     >>> m = np.array([[1.0, 0.0],
     ...               [2.0, 3.0],
@@ -271,7 +255,6 @@ def diagsvd(s, M, N):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.linalg import diagsvd
     >>> vals = np.array([1, 2, 3])  # The array representing the computed svd
     >>> diagsvd(vals, 3, 4)
@@ -289,9 +272,9 @@ def diagsvd(s, M, N):
     typ = part.dtype.char
     MorN = len(s)
     if MorN == M:
-        return numpy.hstack((part, zeros((M, N - M), dtype=typ)))
+        return r_['-1', part, zeros((M, N-M), typ)]
     elif MorN == N:
-        return r_[part, zeros((M - N, N), dtype=typ)]
+        return r_[part, zeros((M-N, N), typ)]
     else:
         raise ValueError("Length of s must be M or N.")
 
@@ -324,7 +307,6 @@ def orth(A, rcond=None):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.linalg import orth
     >>> A = np.array([[2, 0, 0], [0, 5, 0]])  # rank 2 array
     >>> orth(A)
@@ -374,11 +356,10 @@ def null_space(A, rcond=None):
     --------
     1-D null space:
 
-    >>> import numpy as np
     >>> from scipy.linalg import null_space
     >>> A = np.array([[1, 1], [1, 1]])
     >>> ns = null_space(A)
-    >>> ns * np.copysign(1, ns[0,0])  # Remove the sign ambiguity of the vector
+    >>> ns * np.sign(ns[0,0])  # Remove the sign ambiguity of the vector
     array([[ 0.70710678],
            [-0.70710678]])
 
@@ -451,9 +432,9 @@ def subspace_angles(A, B):
     An Hadamard matrix, which has orthogonal columns, so we expect that
     the suspace angle to be :math:`\frac{\pi}{2}`:
 
-    >>> import numpy as np
+    >>> from numpy.random import default_rng
     >>> from scipy.linalg import hadamard, subspace_angles
-    >>> rng = np.random.default_rng()
+    >>> rng = default_rng()
     >>> H = hadamard(4)
     >>> print(H)
     [[ 1  1  1  1]
@@ -479,16 +460,16 @@ def subspace_angles(A, B):
     # 1. Compute orthonormal bases of column-spaces
     A = _asarray_validated(A, check_finite=True)
     if len(A.shape) != 2:
-        raise ValueError(f'expected 2D array, got shape {A.shape}')
+        raise ValueError('expected 2D array, got shape %s' % (A.shape,))
     QA = orth(A)
     del A
 
     B = _asarray_validated(B, check_finite=True)
     if len(B.shape) != 2:
-        raise ValueError(f'expected 2D array, got shape {B.shape}')
+        raise ValueError('expected 2D array, got shape %s' % (B.shape,))
     if len(B) != len(QA):
         raise ValueError('A and B must have the same number of rows, got '
-                         f'{QA.shape[0]} and {B.shape[0]}')
+                         '%s and %s' % (QA.shape[0], B.shape[0]))
     QB = orth(B)
     del B
 

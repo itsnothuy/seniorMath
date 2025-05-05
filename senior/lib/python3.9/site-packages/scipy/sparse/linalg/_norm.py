@@ -3,17 +3,18 @@
 """
 import numpy as np
 from scipy.sparse import issparse
-from scipy.sparse.linalg import svds
-import scipy.sparse as sp
 
-from numpy import sqrt, abs
+from numpy import Inf, sqrt, abs
 
 __all__ = ['norm']
 
 
 def _sparse_frobenius_norm(x):
-    data = sp._sputils._todata(x)
-    return np.linalg.norm(data)
+    if np.issubdtype(x.dtype, np.complexfloating):
+        sqnorm = abs(x).power(2).sum()
+    else:
+        sqnorm = x.power(2).sum()
+    return sqrt(sqnorm)
 
 
 def norm(x, ord=None, axis=None):
@@ -61,7 +62,7 @@ def norm(x, ord=None, axis=None):
     0      abs(x).sum(axis=axis)
     1      max(sum(abs(x), axis=0))
     -1     min(sum(abs(x), axis=0))
-    2      Spectral norm (the largest singular value)
+    2      Not implemented
     -2     Not implemented
     other  Not implemented
     =====  ============================
@@ -103,12 +104,6 @@ def norm(x, ord=None, axis=None):
     >>> norm(b, -1)
     6
 
-    The matrix 2-norm or the spectral norm is the largest singular
-    value, computed approximately and with limitations.
-
-    >>> b = diags([-1, 1], [0, 1], shape=(9, 10))
-    >>> norm(b, 2)
-    1.9753...
     """
     if not issparse(x):
         raise TypeError("input is not sparse. use numpy.linalg.norm")
@@ -136,24 +131,23 @@ def norm(x, ord=None, axis=None):
     if len(axis) == 2:
         row_axis, col_axis = axis
         if not (-nd <= row_axis < nd and -nd <= col_axis < nd):
-            message = f'Invalid axis {axis!r} for an array with shape {x.shape!r}'
-            raise ValueError(message)
+            raise ValueError('Invalid axis %r for an array with shape %r' %
+                             (axis, x.shape))
         if row_axis % nd == col_axis % nd:
             raise ValueError('Duplicate axes given.')
         if ord == 2:
-            # Only solver="lobpcg" supports all numpy dtypes
-            _, s, _ = svds(x, k=1, solver="lobpcg")
-            return s[0]
+            raise NotImplementedError
+            #return _multi_svd_norm(x, row_axis, col_axis, amax)
         elif ord == -2:
             raise NotImplementedError
             #return _multi_svd_norm(x, row_axis, col_axis, amin)
         elif ord == 1:
             return abs(x).sum(axis=row_axis).max(axis=col_axis)[0,0]
-        elif ord == np.inf:
+        elif ord == Inf:
             return abs(x).sum(axis=col_axis).max(axis=row_axis)[0,0]
         elif ord == -1:
             return abs(x).sum(axis=row_axis).min(axis=col_axis)[0,0]
-        elif ord == -np.inf:
+        elif ord == -Inf:
             return abs(x).sum(axis=col_axis).min(axis=row_axis)[0,0]
         elif ord in (None, 'f', 'fro'):
             # The axis order does not matter for this norm.
@@ -163,11 +157,11 @@ def norm(x, ord=None, axis=None):
     elif len(axis) == 1:
         a, = axis
         if not (-nd <= a < nd):
-            message = f'Invalid axis {axis!r} for an array with shape {x.shape!r}'
-            raise ValueError(message)
-        if ord == np.inf:
+            raise ValueError('Invalid axis %r for an array with shape %r' %
+                             (axis, x.shape))
+        if ord == Inf:
             M = abs(x).max(axis=a)
-        elif ord == -np.inf:
+        elif ord == -Inf:
             M = abs(x).min(axis=a)
         elif ord == 0:
             # Zero norm

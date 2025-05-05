@@ -28,3 +28,9 @@ def exploratory_data_analysis():
 
 if __name__ == "__main__":
     exploratory_data_analysis()
+
+
+// transformation to the year
+// take the log of the time variable
+// prediction 
+// use other datas (financial ratios)

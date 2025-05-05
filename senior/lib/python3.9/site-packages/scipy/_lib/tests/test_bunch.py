@@ -1,3 +1,4 @@
+
 import pytest
 import pickle
 from numpy.testing import assert_equal
@@ -15,7 +16,7 @@ class TestMakeTupleBunch:
     # Tests with Result
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    def setup_method(self):
+    def setup(self):
         # Set up an instance of Result.
         self.result = Result(x=1, y=2, z=3, w=99, beta=0.5)
 

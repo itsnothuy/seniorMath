@@ -1,7 +1,7 @@
 """unit tests for sparse utility functions"""
 
 import numpy as np
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, suppress_warnings
 from pytest import raises as assert_raises
 from scipy.sparse import _sputils as sputils
 from scipy.sparse._sputils import matrix
@@ -67,14 +67,6 @@ class TestSparseUtils:
         assert_equal(sputils.isshape((-1, 2), nonneg=True),False)
         assert_equal(sputils.isshape((2, -1), nonneg=True),False)
 
-        assert_equal(sputils.isshape((1.5, 2), allow_1d=True), False)
-        assert_equal(sputils.isshape(([2], 2), allow_1d=True), False)
-        assert_equal(sputils.isshape((2, 2, -2), nonneg=True, allow_1d=True),
-                     False)
-        assert_equal(sputils.isshape((2,), allow_1d=True), True)
-        assert_equal(sputils.isshape((2, 2,), allow_1d=True), True)
-        assert_equal(sputils.isshape((2, 2, 2), allow_1d=True), False)
-
     def test_issequence(self):
         assert_equal(sputils.issequence((1,)), True)
         assert_equal(sputils.issequence((1, 2, 3)), True)
@@ -109,7 +101,7 @@ class TestSparseUtils:
             sputils.validateaxis(axis)
 
     def test_get_index_dtype(self):
-        imax = np.int64(np.iinfo(np.int32).max)
+        imax = np.iinfo(np.int32).max
         too_big = imax + 1
 
         # Check that uint32's with no values too large doesn't return

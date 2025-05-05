@@ -15,8 +15,7 @@ from threading import RLock
 
 import numpy as np
 from scipy.optimize import _cobyla as cobyla
-from ._optimize import (OptimizeResult, _check_unknown_options,
-    _prepare_scalar_function)
+from ._optimize import OptimizeResult, _check_unknown_options
 try:
     from itertools import izip
 except ImportError:
@@ -24,7 +23,7 @@ except ImportError:
 
 __all__ = ['fmin_cobyla']
 
-# Workaround as _cobyla.minimize is not threadsafe
+# Workarund as _cobyla.minimize is not threadsafe
 # due to an unknown f2py bug and can segfault,
 # see gh-9658.
 _module_lock = RLock()
@@ -182,14 +181,13 @@ def fmin_cobyla(func, x0, cons, args=(), consargs=None, rhobeg=1.0,
     sol = _minimize_cobyla(func, x0, args, constraints=con,
                            **opts)
     if disp and not sol['success']:
-        print(f"COBYLA failed to find a solution: {sol.message}")
+        print("COBYLA failed to find a solution: %s" % (sol.message,))
     return sol['x']
-
 
 @synchronized
 def _minimize_cobyla(fun, x0, args=(), constraints=(),
                      rhobeg=1.0, tol=1e-4, maxiter=1000,
-                     disp=False, catol=2e-4, callback=None, bounds=None,
+                     disp=False, catol=2e-4, callback=None,
                      **unknown_options):
     """
     Minimize a scalar function of one or more variables using the
@@ -209,6 +207,9 @@ def _minimize_cobyla(fun, x0, args=(), constraints=(),
         Maximum number of function evaluations.
     catol : float
         Tolerance (absolute) for constraint violations
+    callback : callable, optional
+        Called after each iteration, as ``callback(x)``, where ``x`` is the
+        current parameter vector.
 
     """
     _check_unknown_options(unknown_options)
@@ -219,21 +220,6 @@ def _minimize_cobyla(fun, x0, args=(), constraints=(),
     # check constraints
     if isinstance(constraints, dict):
         constraints = (constraints, )
-
-    if bounds:
-        i_lb = np.isfinite(bounds.lb)
-        if np.any(i_lb):
-            def lb_constraint(x, *args, **kwargs):
-                return x[i_lb] - bounds.lb[i_lb]
-
-            constraints.append({'type': 'ineq', 'fun': lb_constraint})
-
-        i_ub = np.isfinite(bounds.ub)
-        if np.any(i_ub):
-            def ub_constraint(x):
-                return bounds.ub[i_ub] - x[i_ub]
-
-            constraints.append({'type': 'ineq', 'fun': ub_constraint})
 
     for ic, con in enumerate(constraints):
         # check type
@@ -271,14 +257,8 @@ def _minimize_cobyla(fun, x0, args=(), constraints=(),
         cons_lengths.append(cons_length)
     m = sum(cons_lengths)
 
-    # create the ScalarFunction, cobyla doesn't require derivative function
-    def _jac(x, *args):
-        return None
-
-    sf = _prepare_scalar_function(fun, x0, args=args, jac=_jac)
-
     def calcfc(x, con):
-        f = sf.fun(x)
+        f = fun(np.copy(x), *args)
         i = 0
         for size, c in izip(cons_lengths, constraints):
             con[i: i + size] = c['fun'](x, *c['args'])

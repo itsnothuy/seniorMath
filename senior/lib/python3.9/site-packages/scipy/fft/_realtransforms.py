@@ -21,8 +21,8 @@ def dctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         The shape of the result. If both `s` and `axes` (see below) are None,
         `s` is ``x.shape``; if `s` is None but `axes` is not None, then `s` is
         ``numpy.take(x.shape, axes, axis=0)``.
-        If ``s[i] > x.shape[i]``, the ith dimension of the input is padded with zeros.
-        If ``s[i] < x.shape[i]``, the ith dimension of the input is truncated to length
+        If ``s[i] > x.shape[i]``, the ith dimension is padded with zeros.
+        If ``s[i] < x.shape[i]``, the ith dimension is truncated to length
         ``s[i]``.
         If any element of `s` is -1, the size of the corresponding dimension of
         `x` is used.
@@ -39,7 +39,7 @@ def dctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized DCT variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -59,7 +59,6 @@ def dctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fft import dctn, idctn
     >>> rng = np.random.default_rng()
     >>> y = rng.standard_normal((16, 16))
@@ -86,8 +85,8 @@ def idctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         The shape of the result.  If both `s` and `axes` (see below) are
         None, `s` is ``x.shape``; if `s` is None but `axes` is
         not None, then `s` is ``numpy.take(x.shape, axes, axis=0)``.
-        If ``s[i] > x.shape[i]``, the ith dimension of the input is padded with zeros.
-        If ``s[i] < x.shape[i]``, the ith dimension of the input is truncated to length
+        If ``s[i] > x.shape[i]``, the ith dimension is padded with zeros.
+        If ``s[i] < x.shape[i]``, the ith dimension is truncated to length
         ``s[i]``.
         If any element of `s` is -1, the size of the corresponding dimension of
         `x` is used.
@@ -104,7 +103,7 @@ def idctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized IDCT variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -124,7 +123,6 @@ def idctn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fft import dctn, idctn
     >>> rng = np.random.default_rng()
     >>> y = rng.standard_normal((16, 16))
@@ -151,8 +149,8 @@ def dstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         The shape of the result.  If both `s` and `axes` (see below) are None,
         `s` is ``x.shape``; if `s` is None but `axes` is not None, then `s` is
         ``numpy.take(x.shape, axes, axis=0)``.
-        If ``s[i] > x.shape[i]``, the ith dimension of the input is padded with zeros.
-        If ``s[i] < x.shape[i]``, the ith dimension of the input is truncated to length
+        If ``s[i] > x.shape[i]``, the ith dimension is padded with zeros.
+        If ``s[i] < x.shape[i]``, the ith dimension is truncated to length
         ``s[i]``.
         If any element of `shape` is -1, the size of the corresponding dimension
         of `x` is used.
@@ -169,7 +167,7 @@ def dstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized DST variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -189,7 +187,6 @@ def dstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fft import dstn, idstn
     >>> rng = np.random.default_rng()
     >>> y = rng.standard_normal((16, 16))
@@ -216,8 +213,8 @@ def idstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         The shape of the result.  If both `s` and `axes` (see below) are None,
         `s` is ``x.shape``; if `s` is None but `axes` is not None, then `s` is
         ``numpy.take(x.shape, axes, axis=0)``.
-        If ``s[i] > x.shape[i]``, the ith dimension of the input is padded with zeros.
-        If ``s[i] < x.shape[i]``, the ith dimension of the input is truncated to length
+        If ``s[i] > x.shape[i]``, the ith dimension is padded with zeros.
+        If ``s[i] < x.shape[i]``, the ith dimension is truncated to length
         ``s[i]``.
         If any element of `s` is -1, the size of the corresponding dimension of
         `x` is used.
@@ -234,7 +231,7 @@ def idstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized IDST variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -254,7 +251,6 @@ def idstn(x, type=2, s=None, axes=None, norm=None, overwrite_x=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fft import dstn, idstn
     >>> rng = np.random.default_rng()
     >>> y = rng.standard_normal((16, 16))
@@ -293,7 +289,7 @@ def dct(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False, workers=None,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized DCT variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -405,7 +401,6 @@ def dct(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False, workers=None,
     Half of the FFT input is used to generate half of the FFT output:
 
     >>> from scipy.fft import fft, dct
-    >>> import numpy as np
     >>> fft(np.array([4., 3., 5., 10., 5., 3.])).real
     array([ 30.,  -8.,   6.,  -2.,   6.,  -8.])
     >>> dct(np.array([4., 3., 5., 10.]), 1)
@@ -444,7 +439,7 @@ def idct(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized IDCT variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -485,7 +480,6 @@ def idct(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False,
     input is used to generate half of the IFFT output:
 
     >>> from scipy.fft import ifft, idct
-    >>> import numpy as np
     >>> ifft(np.array([ 30.,  -8.,   6.,  -2.,   6.,  -8.])).real
     array([  4.,   3.,   5.,  10.,   5.,   3.])
     >>> idct(np.array([ 30.,  -8.,   6.,  -2.]), 1)
@@ -524,7 +518,7 @@ def dst(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False, workers=None,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized DST variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 
@@ -582,7 +576,7 @@ def dst(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False, workers=None,
 
         y_k = 2 \sum_{n=0}^{N-1} x_n \sin\left(\frac{\pi(k+1)(2n+1)}{2N}\right)
 
-    If ``orthogonalize=True``, ``y[-1]`` is divided :math:`\sqrt{2}` which, when
+    If ``orthogonalize=True``, ``y[0]`` is divided :math:`\sqrt{2}` which, when
     combined with ``norm="ortho"``, makes the corresponding matrix of
     coefficients orthonormal (``O @ O.T = np.eye(N)``).
 
@@ -597,7 +591,7 @@ def dst(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False, workers=None,
         y_k = (-1)^k x_{N-1} + 2 \sum_{n=0}^{N-2} x_n \sin\left(
         \frac{\pi(2k+1)(n+1)}{2N}\right)
 
-    If ``orthogonalize=True``, ``x[-1]`` is multiplied by :math:`\sqrt{2}`
+    If ``orthogonalize=True``, ``x[0]`` is multiplied by :math:`\sqrt{2}`
     which, when combined with ``norm="ortho"``, makes the corresponding matrix
     of coefficients orthonormal (``O @ O.T = np.eye(N)``).
 
@@ -659,7 +653,7 @@ def idst(x, type=2, n=None, axis=-1, norm=None, overwrite_x=False,
         See :func:`~scipy.fft.fft` for more details.
     orthogonalize : bool, optional
         Whether to use the orthogonalized IDST variant (see Notes).
-        Defaults to ``True`` when ``norm="ortho"`` and ``False`` otherwise.
+        Defaults to ``True`` when ``norm=="ortho"`` and ``False`` otherwise.
 
         .. versionadded:: 1.8.0
 

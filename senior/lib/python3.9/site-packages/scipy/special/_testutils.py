@@ -23,11 +23,9 @@ class MissingModule:
 
 def check_version(module, min_ver):
     if type(module) == MissingModule:
-        return pytest.mark.skip(reason=f"{module.name} is not installed")
-    return pytest.mark.skipif(
-        _pep440.parse(module.__version__) < _pep440.Version(min_ver),
-        reason=f"{module.__name__} version >= {min_ver} required"
-    )
+        return pytest.mark.skip(reason="{} is not installed".format(module.name))
+    return pytest.mark.skipif(_pep440.parse(module.__version__) < _pep440.Version(min_ver),
+                              reason="{} version >= {} required".format(module.__name__, min_ver))
 
 
 #------------------------------------------------------------------------------
@@ -121,7 +119,7 @@ class FuncData:
         Whether to ignore signs of infinities.
         (Doesn't matter for complex-valued functions.)
     distinguish_nan_and_inf : bool, optional
-        If True, treat numbers which contain nans or infs as
+        If True, treat numbers which contain nans or infs as as
         equal. Sets ignore_inf_sign to be True.
 
     """
@@ -141,8 +139,7 @@ class FuncData:
                 result_columns = (result_columns,)
             self.result_columns = tuple(result_columns)
             if result_func is not None:
-                message = "Only result_func or result_columns should be provided"
-                raise ValueError(message)
+                raise ValueError("Only result_func or result_columns should be provided")
         elif result_func is not None:
             self.result_columns = None
         else:
@@ -294,18 +291,16 @@ class FuncData:
                 msg = [""]
                 msg.append("Max |adiff|: %g" % diff[bad_j].max())
                 msg.append("Max |rdiff|: %g" % rdiff[bad_j].max())
-                msg.append("Bad results (%d out of %d) for the following points "
-                           "(in output %d):"
+                msg.append("Bad results (%d out of %d) for the following points (in output %d):"
                            % (np.sum(bad_j), point_count, output_num,))
                 for j in np.nonzero(bad_j)[0]:
                     j = int(j)
-                    def fmt(x):
-                        return '%30s' % np.array2string(x[j], precision=18)
+                    fmt = lambda x: "%30s" % np.array2string(x[j], precision=18)
                     a = "  ".join(map(fmt, params))
                     b = "  ".join(map(fmt, got))
                     c = "  ".join(map(fmt, wanted))
                     d = fmt(rdiff)
-                    msg.append(f"{a} => {b} != {c}  (rdiff {d})")
+                    msg.append("%s => %s != %s  (rdiff %s)" % (a, b, c, d))
                 assert_(False, "\n".join(msg))
 
     def __repr__(self):
@@ -315,7 +310,7 @@ class FuncData:
         else:
             is_complex = ""
         if self.dataname:
-            return "<Data for {}{}: {}>".format(self.func.__name__, is_complex,
+            return "<Data for %s%s: %s>" % (self.func.__name__, is_complex,
                                             os.path.basename(self.dataname))
         else:
-            return f"<Data for {self.func.__name__}{is_complex}>"
+            return "<Data for %s%s>" % (self.func.__name__, is_complex)

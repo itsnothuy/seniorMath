@@ -9,6 +9,7 @@ import numpy as np
 
 from numpy.testing import (assert_array_almost_equal,
                            assert_array_equal, assert_equal, assert_)
+import pytest
 from pytest import raises as assert_raises
 
 from scipy.io.arff import loadarff
@@ -276,7 +277,7 @@ class TestRelationalAttribute:
 
     def test_data(self):
         dtype_instance = [('attr_date', 'datetime64[D]'),
-                          ('attr_number', np.float64)]
+                          ('attr_number', np.float_)]
 
         expected = [
             np.array([('1999-01-31', 1), ('1935-11-27', 10)],
@@ -316,7 +317,7 @@ class TestRelationalAttributeLong:
         assert_equal(relational.attributes[0].type_name, 'numeric')
 
     def test_data(self):
-        dtype_instance = [('attr_number', np.float64)]
+        dtype_instance = [('attr_number', np.float_)]
 
         expected = np.array([(n,) for n in range(30000)],
                             dtype=dtype_instance)
@@ -327,9 +328,7 @@ class TestRelationalAttributeLong:
 
 class TestQuotedNominal:
     """
-    Regression test for issue #10232:
-    
-    Exception in loadarff with quoted nominal attributes.
+    Regression test for issue #10232 : Exception in loadarff with quoted nominal attributes.
     """
 
     def setup_method(self):
@@ -348,7 +347,7 @@ class TestQuotedNominal:
 
     def test_data(self):
 
-        age_dtype_instance = np.float64
+        age_dtype_instance = np.float_
         smoker_dtype_instance = '<S3'
 
         age_expected = np.array([
@@ -375,9 +374,7 @@ class TestQuotedNominal:
 
 class TestQuotedNominalSpaces:
     """
-    Regression test for issue #10232:
-    
-    Exception in loadarff with quoted nominal attributes.
+    Regression test for issue #10232 : Exception in loadarff with quoted nominal attributes.
     """
 
     def setup_method(self):
@@ -396,7 +393,7 @@ class TestQuotedNominalSpaces:
 
     def test_data(self):
 
-        age_dtype_instance = np.float64
+        age_dtype_instance = np.float_
         smoker_dtype_instance = '<S5'
 
         age_expected = np.array([

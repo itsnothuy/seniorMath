@@ -29,12 +29,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 from collections.abc import Iterable
-import numbers
 import warnings
 import numpy
 import operator
-
-from scipy._lib._util import normalize_axis_index
+from numpy.core.multiarray import normalize_axis_index
 from . import _ni_support
 from . import _nd_image
 from . import _ni_docstrings
@@ -100,11 +98,6 @@ def correlate1d(input, weights, axis=-1, output=None, mode="reflect",
     %(mode_reflect)s
     %(cval)s
     %(origin)s
-
-    Returns
-    -------
-    result : ndarray
-        Correlation result. Has the same shape as `input`.
 
     Examples
     --------
@@ -216,7 +209,7 @@ def _gaussian_kernel1d(sigma, order, radius):
 
 @_ni_docstrings.docfiller
 def gaussian_filter1d(input, sigma, axis=-1, order=0, output=None,
-                      mode="reflect", cval=0.0, truncate=4.0, *, radius=None):
+                      mode="reflect", cval=0.0, truncate=4.0):
     """1-D Gaussian filter.
 
     Parameters
@@ -235,25 +228,14 @@ def gaussian_filter1d(input, sigma, axis=-1, order=0, output=None,
     truncate : float, optional
         Truncate the filter at this many standard deviations.
         Default is 4.0.
-    radius : None or int, optional
-        Radius of the Gaussian kernel. If specified, the size of
-        the kernel will be ``2*radius + 1``, and `truncate` is ignored.
-        Default is None.
 
     Returns
     -------
     gaussian_filter1d : ndarray
 
-    Notes
-    -----
-    The Gaussian kernel will have size ``2*radius + 1`` along each axis. If
-    `radius` is None, a default ``radius = round(truncate * sigma)`` will be
-    used.
-
     Examples
     --------
     >>> from scipy.ndimage import gaussian_filter1d
-    >>> import numpy as np
     >>> gaussian_filter1d([1.0, 2.0, 3.0, 4.0, 5.0], 1)
     array([ 1.42704095,  2.06782203,  3.        ,  3.93217797,  4.57295905])
     >>> gaussian_filter1d([1.0, 2.0, 3.0, 4.0, 5.0], 4)
@@ -274,10 +256,6 @@ def gaussian_filter1d(input, sigma, axis=-1, order=0, output=None,
     sd = float(sigma)
     # make the radius of the filter equal to truncate standard deviations
     lw = int(truncate * sd + 0.5)
-    if radius is not None:
-        lw = radius
-    if not isinstance(lw, numbers.Integral) or lw < 0:
-        raise ValueError('Radius must be a nonnegative integer.')
     # Since we are calling correlate, not convolve, revert the kernel
     weights = _gaussian_kernel1d(sigma, order, lw)[::-1]
     return correlate1d(input, weights, axis, output, mode, cval, 0)
@@ -285,8 +263,7 @@ def gaussian_filter1d(input, sigma, axis=-1, order=0, output=None,
 
 @_ni_docstrings.docfiller
 def gaussian_filter(input, sigma, order=0, output=None,
-                    mode="reflect", cval=0.0, truncate=4.0, *, radius=None,
-                    axes=None):
+                    mode="reflect", cval=0.0, truncate=4.0):
     """Multidimensional Gaussian filter.
 
     Parameters
@@ -305,21 +282,9 @@ def gaussian_filter(input, sigma, order=0, output=None,
     %(output)s
     %(mode_multiple)s
     %(cval)s
-    truncate : float, optional
+    truncate : float
         Truncate the filter at this many standard deviations.
         Default is 4.0.
-    radius : None or int or sequence of ints, optional
-        Radius of the Gaussian kernel. The radius are given for each axis
-        as a sequence, or as a single number, in which case it is equal
-        for all axes. If specified, the size of the kernel along each axis
-        will be ``2*radius + 1``, and `truncate` is ignored.
-        Default is None.
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes. When `axes` is
-        specified, any tuples used for `sigma`, `order`, `mode` and/or `radius`
-        must match the length of `axes`. The ith entry in any of these tuples
-        corresponds to the ith entry in `axes`.
 
     Returns
     -------
@@ -335,14 +300,9 @@ def gaussian_filter(input, sigma, order=0, output=None,
     because intermediate results may be stored with insufficient
     precision.
 
-    The Gaussian kernel will have size ``2*radius + 1`` along each axis. If
-    `radius` is None, the default ``radius = round(truncate * sigma)`` will be
-    used.
-
     Examples
     --------
     >>> from scipy.ndimage import gaussian_filter
-    >>> import numpy as np
     >>> a = np.arange(50, step=2).reshape((5,5))
     >>> a
     array([[ 0,  2,  4,  6,  8],
@@ -357,13 +317,13 @@ def gaussian_filter(input, sigma, order=0, output=None,
            [29, 31, 33, 34, 36],
            [35, 37, 39, 40, 42]])
 
-    >>> from scipy import datasets
+    >>> from scipy import misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = gaussian_filter(ascent, sigma=5)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
@@ -371,19 +331,16 @@ def gaussian_filter(input, sigma, order=0, output=None,
     """
     input = numpy.asarray(input)
     output = _ni_support._get_output(output, input)
-
-    axes = _ni_support._check_axes(axes, input.ndim)
-    num_axes = len(axes)
-    orders = _ni_support._normalize_sequence(order, num_axes)
-    sigmas = _ni_support._normalize_sequence(sigma, num_axes)
-    modes = _ni_support._normalize_sequence(mode, num_axes)
-    radiuses = _ni_support._normalize_sequence(radius, num_axes)
-    axes = [(axes[ii], sigmas[ii], orders[ii], modes[ii], radiuses[ii])
-            for ii in range(num_axes) if sigmas[ii] > 1e-15]
+    orders = _ni_support._normalize_sequence(order, input.ndim)
+    sigmas = _ni_support._normalize_sequence(sigma, input.ndim)
+    modes = _ni_support._normalize_sequence(mode, input.ndim)
+    axes = list(range(input.ndim))
+    axes = [(axes[ii], sigmas[ii], orders[ii], modes[ii])
+            for ii in range(len(axes)) if sigmas[ii] > 1e-15]
     if len(axes) > 0:
-        for axis, sigma, order, mode, radius in axes:
+        for axis, sigma, order, mode in axes:
             gaussian_filter1d(input, sigma, axis, order, output,
-                              mode, cval, truncate, radius=radius)
+                              mode, cval, truncate)
             input = output
     else:
         output[...] = input[...]
@@ -402,44 +359,19 @@ def prewitt(input, axis=-1, output=None, mode="reflect", cval=0.0):
     %(mode_multiple)s
     %(cval)s
 
-    Returns
-    -------
-    prewitt : ndarray
-        Filtered array. Has the same shape as `input`.
-
-    See Also
-    --------
-    sobel: Sobel filter
-
-    Notes
-    -----
-    This function computes the one-dimensional Prewitt filter.
-    Horizontal edges are emphasised with the horizontal transform (axis=0),
-    vertical edges with the vertical transform (axis=1), and so on for higher
-    dimensions. These can be combined to give the magnitude.
-
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
-    >>> import numpy as np
-    >>> ascent = datasets.ascent()
-    >>> prewitt_h = ndimage.prewitt(ascent, axis=0)
-    >>> prewitt_v = ndimage.prewitt(ascent, axis=1)
-    >>> magnitude = np.sqrt(prewitt_h ** 2 + prewitt_v ** 2)
-    >>> magnitude *= 255 / np.max(magnitude) # Normalization
-    >>> fig, axes = plt.subplots(2, 2, figsize = (8, 8))
-    >>> plt.gray()
-    >>> axes[0, 0].imshow(ascent)
-    >>> axes[0, 1].imshow(prewitt_h)
-    >>> axes[1, 0].imshow(prewitt_v)
-    >>> axes[1, 1].imshow(magnitude)
-    >>> titles = ["original", "horizontal", "vertical", "magnitude"]
-    >>> for i, ax in enumerate(axes.ravel()):
-    ...     ax.set_title(titles[i])
-    ...     ax.axis("off")
+    >>> fig = plt.figure()
+    >>> plt.gray()  # show the filtered result in grayscale
+    >>> ax1 = fig.add_subplot(121)  # left side
+    >>> ax2 = fig.add_subplot(122)  # right side
+    >>> ascent = misc.ascent()
+    >>> result = ndimage.prewitt(ascent)
+    >>> ax1.imshow(ascent)
+    >>> ax2.imshow(result)
     >>> plt.show()
-
     """
     input = numpy.asarray(input)
     axis = normalize_axis_index(axis, input.ndim)
@@ -464,40 +396,19 @@ def sobel(input, axis=-1, output=None, mode="reflect", cval=0.0):
     %(mode_multiple)s
     %(cval)s
 
-    Returns
-    -------
-    sobel : ndarray
-        Filtered array. Has the same shape as `input`.
-
-    Notes
-    -----
-    This function computes the axis-specific Sobel gradient.
-    The horizontal edges can be emphasised with the horizontal transform (axis=0),
-    the vertical edges with the vertical transform (axis=1) and so on for higher
-    dimensions. These can be combined to give the magnitude.
-
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
-    >>> import numpy as np
-    >>> ascent = datasets.ascent().astype('int32')
-    >>> sobel_h = ndimage.sobel(ascent, 0)  # horizontal gradient
-    >>> sobel_v = ndimage.sobel(ascent, 1)  # vertical gradient
-    >>> magnitude = np.sqrt(sobel_h**2 + sobel_v**2)
-    >>> magnitude *= 255.0 / np.max(magnitude)  # normalization
-    >>> fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
-    >>> axs[0, 0].imshow(ascent)
-    >>> axs[0, 1].imshow(sobel_h)
-    >>> axs[1, 0].imshow(sobel_v)
-    >>> axs[1, 1].imshow(magnitude)
-    >>> titles = ["original", "horizontal", "vertical", "magnitude"]
-    >>> for i, ax in enumerate(axs.ravel()):
-    ...     ax.set_title(titles[i])
-    ...     ax.axis("off")
+    >>> ax1 = fig.add_subplot(121)  # left side
+    >>> ax2 = fig.add_subplot(122)  # right side
+    >>> ascent = misc.ascent()
+    >>> result = ndimage.sobel(ascent)
+    >>> ax1.imshow(ascent)
+    >>> ax2.imshow(result)
     >>> plt.show()
-
     """
     input = numpy.asarray(input)
     axis = normalize_axis_index(axis, input.ndim)
@@ -533,12 +444,6 @@ def generic_laplace(input, derivative2, output=None, mode="reflect",
     %(cval)s
     %(extra_keywords)s
     %(extra_arguments)s
-
-    Returns
-    -------
-    generic_laplace : ndarray
-        Filtered array. Has the same shape as `input`.
-
     """
     if extra_keywords is None:
         extra_keywords = {}
@@ -569,20 +474,15 @@ def laplace(input, output=None, mode="reflect", cval=0.0):
     %(mode_multiple)s
     %(cval)s
 
-    Returns
-    -------
-    laplace : ndarray
-        Filtered array. Has the same shape as `input`.
-
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.laplace(ascent)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
@@ -610,16 +510,11 @@ def gaussian_laplace(input, sigma, output=None, mode="reflect",
     %(cval)s
     Extra keyword arguments will be passed to gaussian_filter().
 
-    Returns
-    -------
-    gaussian_laplace : ndarray
-        Filtered array. Has the same shape as `input`.
-
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
 
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
@@ -670,12 +565,6 @@ def generic_gradient_magnitude(input, derivative, output=None,
     %(cval)s
     %(extra_keywords)s
     %(extra_arguments)s
-
-    Returns
-    -------
-    generic_gradient_matnitude : ndarray
-        Filtered array. Has the same shape as `input`.
-
     """
     if extra_keywords is None:
         extra_keywords = {}
@@ -723,13 +612,13 @@ def gaussian_gradient_magnitude(input, sigma, output=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.gaussian_gradient_magnitude(ascent, sigma=5)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
@@ -834,7 +723,6 @@ def correlate(input, weights, output=None, mode='reflect', cval=0.0,
     as kernel over the image and computing the sum of products at each location.
 
     >>> from scipy.ndimage import correlate
-    >>> import numpy as np
     >>> input_img = np.arange(25).reshape(5,5)
     >>> print(input_img)
     [[ 0  1  2  3  4]
@@ -912,7 +800,6 @@ def convolve(input, weights, output=None, mode='reflect', cval=0.0,
     because in this case borders (i.e., where the `weights` kernel, centered
     on any one value, extends beyond an edge of `input`) are treated as zeros.
 
-    >>> import numpy as np
     >>> a = np.array([[1, 2, 0, 0],
     ...               [5, 3, 0, 4],
     ...               [0, 0, 0, 7],
@@ -995,11 +882,6 @@ def uniform_filter1d(input, size, axis=-1, output=None,
     %(cval)s
     %(origin)s
 
-    Returns
-    -------
-    result : ndarray
-        Filtered array. Has same shape as `input`.
-
     Examples
     --------
     >>> from scipy.ndimage import uniform_filter1d
@@ -1029,7 +911,7 @@ def uniform_filter1d(input, size, axis=-1, output=None,
 
 @_ni_docstrings.docfiller
 def uniform_filter(input, size=3, output=None, mode="reflect",
-                   cval=0.0, origin=0, *, axes=None):
+                   cval=0.0, origin=0):
     """Multidimensional uniform filter.
 
     Parameters
@@ -1043,12 +925,6 @@ def uniform_filter(input, size=3, output=None, mode="reflect",
     %(mode_multiple)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes. When `axes` is
-        specified, any tuples used for `size`, `origin`, and/or `mode`
-        must match the length of `axes`. The ith entry in any of these tuples
-        corresponds to the ith entry in `axes`.
 
     Returns
     -------
@@ -1065,13 +941,13 @@ def uniform_filter(input, size=3, output=None, mode="reflect",
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.uniform_filter(ascent, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
@@ -1080,13 +956,12 @@ def uniform_filter(input, size=3, output=None, mode="reflect",
     input = numpy.asarray(input)
     output = _ni_support._get_output(output, input,
                                      complex_output=input.dtype.kind == 'c')
-    axes = _ni_support._check_axes(axes, input.ndim)
-    num_axes = len(axes)
-    sizes = _ni_support._normalize_sequence(size, num_axes)
-    origins = _ni_support._normalize_sequence(origin, num_axes)
-    modes = _ni_support._normalize_sequence(mode, num_axes)
+    sizes = _ni_support._normalize_sequence(size, input.ndim)
+    origins = _ni_support._normalize_sequence(origin, input.ndim)
+    modes = _ni_support._normalize_sequence(mode, input.ndim)
+    axes = list(range(input.ndim))
     axes = [(axes[ii], sizes[ii], origins[ii], modes[ii])
-            for ii in range(num_axes) if sizes[ii] > 1]
+            for ii in range(len(axes)) if sizes[ii] > 1]
     if len(axes) > 0:
         for axis, size, origin, mode in axes:
             uniform_filter1d(input, int(size), axis, output, mode,
@@ -1115,11 +990,6 @@ def minimum_filter1d(input, size, axis=-1, output=None,
     %(mode_reflect)s
     %(cval)s
     %(origin)s
-
-    Returns
-    -------
-    result : ndarray.
-        Filtered image. Has the same shape as `input`.
 
     Notes
     -----
@@ -1212,10 +1082,9 @@ def maximum_filter1d(input, size, axis=-1, output=None,
 
 
 def _min_or_max_filter(input, size, footprint, structure, output, mode,
-                       cval, origin, minimum, axes=None):
+                       cval, origin, minimum):
     if (size is not None) and (footprint is not None):
-        warnings.warn("ignoring size because footprint is set",
-                      UserWarning, stacklevel=3)
+        warnings.warn("ignoring size because footprint is set", UserWarning, stacklevel=3)
     if structure is None:
         if footprint is None:
             if size is None:
@@ -1247,12 +1116,11 @@ def _min_or_max_filter(input, size, footprint, structure, output, mode,
         # input and output arrays cannot share memory
         temp = output
         output = _ni_support._get_output(output.dtype, input)
-    axes = _ni_support._check_axes(axes, input.ndim)
-    num_axes = len(axes)
+    origins = _ni_support._normalize_sequence(origin, input.ndim)
     if separable:
-        origins = _ni_support._normalize_sequence(origin, num_axes)
-        sizes = _ni_support._normalize_sequence(size, num_axes)
-        modes = _ni_support._normalize_sequence(mode, num_axes)
+        sizes = _ni_support._normalize_sequence(size, input.ndim)
+        modes = _ni_support._normalize_sequence(mode, input.ndim)
+        axes = list(range(input.ndim))
         axes = [(axes[ii], sizes[ii], origins[ii], modes[ii])
                 for ii in range(len(axes)) if sizes[ii] > 1]
         if minimum:
@@ -1266,36 +1134,17 @@ def _min_or_max_filter(input, size, footprint, structure, output, mode,
         else:
             output[...] = input[...]
     else:
-        origins = _ni_support._normalize_sequence(origin, num_axes)
-        if num_axes < input.ndim:
-            if footprint.ndim != num_axes:
-                raise RuntimeError("footprint array has incorrect shape")
-            footprint = numpy.expand_dims(
-                footprint,
-                tuple(ax for ax in range(input.ndim) if ax not in axes)
-            )
-            # set origin = 0 for any axes not being filtered
-            origins_temp = [0,] * input.ndim
-            for o, ax in zip(origins, axes):
-                origins_temp[ax] = o
-            origins = origins_temp
-
         fshape = [ii for ii in footprint.shape if ii > 0]
         if len(fshape) != input.ndim:
             raise RuntimeError('footprint array has incorrect shape.')
         for origin, lenf in zip(origins, fshape):
             if (lenf // 2 + origin < 0) or (lenf // 2 + origin >= lenf):
-                raise ValueError("invalid origin")
+                raise ValueError('invalid origin')
         if not footprint.flags.contiguous:
             footprint = footprint.copy()
         if structure is not None:
             if len(structure.shape) != input.ndim:
-                raise RuntimeError("structure array has incorrect shape")
-            if num_axes != structure.ndim:
-                structure = numpy.expand_dims(
-                    structure,
-                    tuple(ax for ax in range(structure.ndim) if ax not in axes)
-                )
+                raise RuntimeError('structure array has incorrect shape')
             if not structure.flags.contiguous:
                 structure = structure.copy()
         if not isinstance(mode, str) and isinstance(mode, Iterable):
@@ -1313,7 +1162,7 @@ def _min_or_max_filter(input, size, footprint, structure, output, mode,
 
 @_ni_docstrings.docfiller
 def minimum_filter(input, size=None, footprint=None, output=None,
-                   mode="reflect", cval=0.0, origin=0, *, axes=None):
+                   mode="reflect", cval=0.0, origin=0):
     """Calculate a multidimensional minimum filter.
 
     Parameters
@@ -1324,12 +1173,6 @@ def minimum_filter(input, size=None, footprint=None, output=None,
     %(mode_multiple)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes. When `axes` is
-        specified, any tuples used for `size`, `origin`, and/or `mode`
-        must match the length of `axes`. The ith entry in any of these tuples
-        corresponds to the ith entry in `axes`.
 
     Returns
     -------
@@ -1343,25 +1186,25 @@ def minimum_filter(input, size=None, footprint=None, output=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.minimum_filter(ascent, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
     >>> plt.show()
     """
     return _min_or_max_filter(input, size, footprint, None, output, mode,
-                              cval, origin, 1, axes)
+                              cval, origin, 1)
 
 
 @_ni_docstrings.docfiller
 def maximum_filter(input, size=None, footprint=None, output=None,
-                   mode="reflect", cval=0.0, origin=0, *, axes=None):
+                   mode="reflect", cval=0.0, origin=0):
     """Calculate a multidimensional maximum filter.
 
     Parameters
@@ -1372,12 +1215,6 @@ def maximum_filter(input, size=None, footprint=None, output=None,
     %(mode_multiple)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes. When `axes` is
-        specified, any tuples used for `size`, `origin`, and/or `mode`
-        must match the length of `axes`. The ith entry in any of these tuples
-        corresponds to the ith entry in `axes`.
 
     Returns
     -------
@@ -1391,67 +1228,41 @@ def maximum_filter(input, size=None, footprint=None, output=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.maximum_filter(ascent, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
     >>> plt.show()
     """
     return _min_or_max_filter(input, size, footprint, None, output, mode,
-                              cval, origin, 0, axes)
+                              cval, origin, 0)
 
 
 @_ni_docstrings.docfiller
 def _rank_filter(input, rank, size=None, footprint=None, output=None,
-                 mode="reflect", cval=0.0, origin=0, operation='rank',
-                 axes=None):
+                 mode="reflect", cval=0.0, origin=0, operation='rank'):
     if (size is not None) and (footprint is not None):
-        warnings.warn("ignoring size because footprint is set",
-                      UserWarning, stacklevel=3)
+        warnings.warn("ignoring size because footprint is set", UserWarning, stacklevel=3)
     input = numpy.asarray(input)
     if numpy.iscomplexobj(input):
         raise TypeError('Complex type not supported')
-    axes = _ni_support._check_axes(axes, input.ndim)
-    num_axes = len(axes)
-    origins = _ni_support._normalize_sequence(origin, num_axes)
+    origins = _ni_support._normalize_sequence(origin, input.ndim)
     if footprint is None:
         if size is None:
             raise RuntimeError("no footprint or filter size provided")
-        sizes = _ni_support._normalize_sequence(size, num_axes)
+        sizes = _ni_support._normalize_sequence(size, input.ndim)
         footprint = numpy.ones(sizes, dtype=bool)
     else:
         footprint = numpy.asarray(footprint, dtype=bool)
-    if num_axes < input.ndim:
-        # set origin = 0 for any axes not being filtered
-        origins_temp = [0,] * input.ndim
-        for o, ax in zip(origins, axes):
-            origins_temp[ax] = o
-        origins = origins_temp
-
-        if not isinstance(mode, str) and isinstance(mode, Iterable):
-            # set mode = 'constant' for any axes not being filtered
-            modes = _ni_support._normalize_sequence(mode, num_axes)
-            modes_temp = ['constant'] * input.ndim
-            for m, ax in zip(modes, axes):
-                modes_temp[ax] = m
-            mode = modes_temp
-
-        # insert singleton dimension along any non-filtered axes
-        if footprint.ndim != num_axes:
-            raise RuntimeError("footprint array has incorrect shape")
-        footprint = numpy.expand_dims(
-            footprint,
-            tuple(ax for ax in range(input.ndim) if ax not in axes)
-        )
     fshape = [ii for ii in footprint.shape if ii > 0]
     if len(fshape) != input.ndim:
-        raise RuntimeError('footprint array has incorrect shape.')
+        raise RuntimeError('filter footprint array has incorrect shape.')
     for origin, lenf in zip(origins, fshape):
         if (lenf // 2 + origin < 0) or (lenf // 2 + origin >= lenf):
             raise ValueError('invalid origin')
@@ -1476,10 +1287,10 @@ def _rank_filter(input, rank, size=None, footprint=None, output=None,
         raise RuntimeError('rank not within filter footprint size')
     if rank == 0:
         return minimum_filter(input, None, footprint, output, mode, cval,
-                              origins, axes=None)
+                              origins)
     elif rank == filter_size - 1:
         return maximum_filter(input, None, footprint, output, mode, cval,
-                              origins, axes=None)
+                              origins)
     else:
         output = _ni_support._get_output(output, input)
         temp_needed = numpy.may_share_memory(input, output)
@@ -1502,7 +1313,7 @@ def _rank_filter(input, rank, size=None, footprint=None, output=None,
 
 @_ni_docstrings.docfiller
 def rank_filter(input, rank, size=None, footprint=None, output=None,
-                mode="reflect", cval=0.0, origin=0, *, axes=None):
+                mode="reflect", cval=0.0, origin=0):
     """Calculate a multidimensional rank filter.
 
     Parameters
@@ -1516,9 +1327,6 @@ def rank_filter(input, rank, size=None, footprint=None, output=None,
     %(mode_reflect)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes.
 
     Returns
     -------
@@ -1527,13 +1335,13 @@ def rank_filter(input, rank, size=None, footprint=None, output=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.rank_filter(ascent, rank=42, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
@@ -1541,12 +1349,12 @@ def rank_filter(input, rank, size=None, footprint=None, output=None,
     """
     rank = operator.index(rank)
     return _rank_filter(input, rank, size, footprint, output, mode, cval,
-                        origin, 'rank', axes=axes)
+                        origin, 'rank')
 
 
 @_ni_docstrings.docfiller
 def median_filter(input, size=None, footprint=None, output=None,
-                  mode="reflect", cval=0.0, origin=0, *, axes=None):
+                  mode="reflect", cval=0.0, origin=0):
     """
     Calculate a multidimensional median filter.
 
@@ -1558,9 +1366,6 @@ def median_filter(input, size=None, footprint=None, output=None,
     %(mode_reflect)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes.
 
     Returns
     -------
@@ -1579,26 +1384,25 @@ def median_filter(input, size=None, footprint=None, output=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.median_filter(ascent, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
     >>> plt.show()
     """
     return _rank_filter(input, 0, size, footprint, output, mode, cval,
-                        origin, 'median', axes=axes)
+                        origin, 'median')
 
 
 @_ni_docstrings.docfiller
 def percentile_filter(input, percentile, size=None, footprint=None,
-                      output=None, mode="reflect", cval=0.0, origin=0, *,
-                      axes=None):
+                      output=None, mode="reflect", cval=0.0, origin=0):
     """Calculate a multidimensional percentile filter.
 
     Parameters
@@ -1612,9 +1416,6 @@ def percentile_filter(input, percentile, size=None, footprint=None,
     %(mode_reflect)s
     %(cval)s
     %(origin_multiple)s
-    axes : tuple of int or None, optional
-        If None, `input` is filtered along all axes. Otherwise,
-        `input` is filtered along the specified axes.
 
     Returns
     -------
@@ -1623,20 +1424,20 @@ def percentile_filter(input, percentile, size=None, footprint=None,
 
     Examples
     --------
-    >>> from scipy import ndimage, datasets
+    >>> from scipy import ndimage, misc
     >>> import matplotlib.pyplot as plt
     >>> fig = plt.figure()
     >>> plt.gray()  # show the filtered result in grayscale
     >>> ax1 = fig.add_subplot(121)  # left side
     >>> ax2 = fig.add_subplot(122)  # right side
-    >>> ascent = datasets.ascent()
+    >>> ascent = misc.ascent()
     >>> result = ndimage.percentile_filter(ascent, percentile=20, size=20)
     >>> ax1.imshow(ascent)
     >>> ax2.imshow(result)
     >>> plt.show()
     """
     return _rank_filter(input, percentile, size, footprint, output, mode,
-                        cval, origin, 'percentile', axes=axes)
+                        cval, origin, 'percentile')
 
 
 @_ni_docstrings.docfiller
@@ -1666,11 +1467,6 @@ def generic_filter1d(input, function, filter_size, axis=-1,
     %(origin)s
     %(extra_arguments)s
     %(extra_keywords)s
-
-    Returns
-    -------
-    generic_filter1d : ndarray
-        Filtered array. Has the same shape as `input`.
 
     Notes
     -----
@@ -1750,11 +1546,6 @@ def generic_filter(input, function, size=None, footprint=None,
     %(extra_arguments)s
     %(extra_keywords)s
 
-    Returns
-    -------
-    generic_filter : ndarray
-        Filtered array. Has the same shape as `input`.
-
     Notes
     -----
     This function also accepts low-level callback functions with one of
@@ -1785,51 +1576,9 @@ def generic_filter(input, function, size=None, footprint=None,
     are accepted, but these are for backward compatibility only and should
     not be used in new code.
 
-    Examples
-    --------
-    Import the necessary modules and load the example image used for
-    filtering.
-
-    >>> import numpy as np
-    >>> from scipy import datasets
-    >>> from scipy.ndimage import generic_filter
-    >>> import matplotlib.pyplot as plt
-    >>> ascent = datasets.ascent()
-
-    Compute a maximum filter with kernel size 10 by passing a simple NumPy
-    aggregation function as argument to `function`.
-
-    >>> maximum_filter_result = generic_filter(ascent, np.amax, [10, 10])
-
-    While a maximmum filter could also directly be obtained using
-    `maximum_filter`, `generic_filter` allows generic Python function or
-    `scipy.LowLevelCallable` to be used as a filter. Here, we compute the
-    range between maximum and minimum value as an example for a kernel size
-    of 5.
-
-    >>> def custom_filter(image):
-    ...     return np.amax(image) - np.amin(image)
-    >>> custom_filter_result = generic_filter(ascent, custom_filter, [5, 5])
-
-    Plot the original and filtered images.
-
-    >>> fig, axes = plt.subplots(3, 1, figsize=(4, 12))
-    >>> plt.gray()  # show the filtered result in grayscale
-    >>> top, middle, bottom = axes
-    >>> for ax in axes:
-    ...     ax.set_axis_off()  # remove coordinate system
-    >>> top.imshow(ascent)
-    >>> top.set_title("Original image")
-    >>> middle.imshow(maximum_filter_result)
-    >>> middle.set_title("Maximum filter, Kernel: 10x10")
-    >>> bottom.imshow(custom_filter_result)
-    >>> bottom.set_title("Custom filter, Kernel: 5x5")
-    >>> fig.tight_layout()
-
     """
     if (size is not None) and (footprint is not None):
-        warnings.warn("ignoring size because footprint is set",
-                      UserWarning, stacklevel=2)
+        warnings.warn("ignoring size because footprint is set", UserWarning, stacklevel=2)
     if extra_keywords is None:
         extra_keywords = {}
     input = numpy.asarray(input)

@@ -41,8 +41,7 @@ import warnings
 from collections import namedtuple
 
 from . import distributions
-from scipy._lib._util import _rename_parameter, _contains_nan
-from scipy._lib._bunch import _make_tuple_bunch
+from scipy._lib._util import _rename_parameter
 import scipy.special as special
 import scipy.stats._stats_py
 
@@ -53,7 +52,6 @@ from ._stats_mstats_common import (
         theilslopes as stats_theilslopes,
         siegelslopes as stats_siegelslopes
         )
-
 
 def _chk_asarray(a, axis):
     # Always returns a masked array, raveled for axis=None
@@ -84,30 +82,8 @@ def _chk_size(a, b):
     (na, nb) = (a.size, b.size)
     if na != nb:
         raise ValueError("The size of the input array should match!"
-                         f" ({na} <> {nb})")
+                         " (%s <> %s)" % (na, nb))
     return (a, b, na)
-
-
-def _ttest_finish(df, t, alternative):
-    """Common code between all 3 t-test functions."""
-    # We use ``stdtr`` directly here to preserve masked arrays
-
-    if alternative == 'less':
-        pval = special.stdtr(df, t)
-    elif alternative == 'greater':
-        pval = special.stdtr(df, -t)
-    elif alternative == 'two-sided':
-        pval = special.stdtr(df, -np.abs(t))*2
-    else:
-        raise ValueError("alternative must be "
-                         "'less', 'greater' or 'two-sided'")
-
-    if t.ndim == 0:
-        t = t[()]
-    if pval.ndim == 0:
-        pval = pval[()]
-
-    return t, pval
 
 
 def argstoarray(*args):
@@ -130,7 +106,7 @@ def argstoarray(*args):
 
     Notes
     -----
-    `numpy.ma.vstack` has identical behavior, but is called with a sequence
+    `numpy.ma.row_stack` has identical behavior, but is called with a sequence
     of sequences.
 
     Examples
@@ -190,19 +166,6 @@ def find_repeats(arr):
     counts : ndarray
         Array of counts.
 
-    Examples
-    --------
-    >>> from scipy.stats import mstats
-    >>> mstats.find_repeats([2, 1, 2, 3, 2, 2, 5])
-    (array([2.]), array([4]))
-
-    In the above example, 2 repeats 4 times.
-
-    >>> mstats.find_repeats([[10, 20, 1, 2], [5, 5, 4, 4]])
-    (array([4., 5.]), array([2, 2]))
-
-    In the above example, both 4 and 5 repeat 2 times.
-
     """
     # Make sure we get a copy. ma.compressed promises a "new array", but can
     # actually return a reference.
@@ -237,7 +200,6 @@ def count_tied_groups(x, use_missing=False):
     Examples
     --------
     >>> from scipy.stats import mstats
-    >>> import numpy as np
     >>> z = [0, 0, 0, 2, 2, 2, 3, 3, 4, 5, 6]
     >>> mstats.count_tied_groups(z)
     {2: 1, 3: 2}
@@ -321,7 +283,7 @@ def rankdata(data, axis=None, use_missing=False):
 ModeResult = namedtuple('ModeResult', ('mode', 'count'))
 
 
-def mode(a, axis=0):
+def mode(a, axis=0, **kwargs):
     """
     Returns an array of the modal (most common) value in the passed array.
 
@@ -346,7 +308,6 @@ def mode(a, axis=0):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import stats
     >>> from scipy.stats import mstats
     >>> m_arr = np.ma.array([1, 1, 0, 0, 0, 0], mask=[0, 0, 1, 1, 1, 0])
@@ -354,11 +315,12 @@ def mode(a, axis=0):
     ModeResult(mode=array([1.]), count=array([2.]))
 
     """
-    return _mode(a, axis=axis, keepdims=True)
+    keepdims = kwargs.pop("_keepdims", True)
+    if kwargs:
+        unexpected = list(kwargs)[0]
+        message = f"mode() got an unexpected keyword argument '{unexpected}'"
+        raise TypeError(message)
 
-
-def _mode(a, axis=0, keepdims=True):
-    # Don't want to expose `keepdims` from the public `mstats.mode`
     a, axis = _chk_asarray(a, axis)
 
     def _mode1D(a):
@@ -429,11 +391,11 @@ def pearsonr(x, y):
 
     Warns
     -----
-    `~scipy.stats.ConstantInputWarning`
+    PearsonRConstantInputWarning
         Raised if an input is a constant array.  The correlation coefficient
         is not defined in this case, so ``np.nan`` is returned.
 
-    `~scipy.stats.NearConstantInputWarning`
+    PearsonRNearConstantInputWarning
         Raised if an input is "nearly" constant.  The array ``x`` is considered
         nearly constant if ``norm(x - mean(x)) < 1e-13 * abs(mean(x))``.
         Numerical errors in the calculation ``x - mean(x)`` in this case might
@@ -508,7 +470,6 @@ def pearsonr(x, y):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import stats
     >>> from scipy.stats import mstats
     >>> mstats.pearsonr([1, 2, 3, 4, 5], [10, 9, 2.5, 6, 4])
@@ -568,9 +529,11 @@ def pearsonr(x, y):
     if df < 0:
         return (masked, masked)
 
-    return scipy.stats._stats_py.pearsonr(
-                ma.masked_array(x, mask=m).compressed(),
-                ma.masked_array(y, mask=m).compressed())
+    return scipy.stats._stats_py.pearsonr(ma.masked_array(x, mask=m).compressed(),
+                                      ma.masked_array(y, mask=m).compressed())
+
+
+SpearmanrResult = namedtuple('SpearmanrResult', ('correlation', 'pvalue'))
 
 
 def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
@@ -627,19 +590,10 @@ def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
 
     Returns
     -------
-    res : SignificanceResult
-        An object containing attributes:
-
-        statistic : float or ndarray (2-D square)
-            Spearman correlation matrix or correlation coefficient (if only 2
-            variables are given as parameters). Correlation matrix is square
-            with length equal to total number of variables (columns or rows) in
-            ``a`` and ``b`` combined.
-        pvalue : float
-            The p-value for a hypothesis test whose null hypothesis
-            is that two sets of data are linearly uncorrelated. See
-            `alternative` above for alternative hypotheses. `pvalue` has the
-            same shape as `statistic`.
+    correlation : float
+        Spearman correlation coefficient
+    pvalue : float
+        2-tailed p-value.
 
     References
     ----------
@@ -657,7 +611,7 @@ def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
         if axisout == 0:
             x = ma.column_stack((x, y))
         else:
-            x = ma.vstack((x, y))
+            x = ma.row_stack((x, y))
 
     if axisout == 1:
         # To simplify the code that follow (always use `n_obs, n_vars` shape)
@@ -674,9 +628,7 @@ def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
 
         # If either column is entirely NaN or Inf
         if not np.any(x.data):
-            res = scipy.stats._stats_py.SignificanceResult(np.nan, np.nan)
-            res.correlation = np.nan
-            return res
+            return SpearmanrResult(np.nan, np.nan)
 
         m = ma.getmask(x)
         n_obs = x.shape[0]
@@ -694,18 +646,13 @@ def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
             # errors before taking the square root
             t = rs * np.sqrt((dof / ((rs+1.0) * (1.0-rs))).clip(0))
 
-        t, prob = _ttest_finish(dof, t, alternative)
+        t, prob = scipy.stats._stats_py._ttest_finish(dof, t, alternative)
 
         # For backwards compatibility, return scalars when comparing 2 columns
         if rs.shape == (2, 2):
-            res = scipy.stats._stats_py.SignificanceResult(rs[1, 0],
-                                                           prob[1, 0])
-            res.correlation = rs[1, 0]
-            return res
+            return SpearmanrResult(rs[1, 0], prob[1, 0])
         else:
-            res = scipy.stats._stats_py.SignificanceResult(rs, prob)
-            res.correlation = rs
-            return res
+            return SpearmanrResult(rs, prob)
 
     # Need to do this per pair of variables, otherwise the dropped observations
     # in a third column mess up the result for a pair.
@@ -723,9 +670,7 @@ def spearmanr(x, y=None, use_ties=True, axis=None, nan_policy='propagate',
                 prob[var1, var2] = result.pvalue
                 prob[var2, var1] = result.pvalue
 
-        res = scipy.stats._stats_py.SignificanceResult(rs, prob)
-        res.correlation = rs
-        return res
+        return SpearmanrResult(rs, prob)
 
 
 def _kendall_p_exact(n, c, alternative='two-sided'):
@@ -795,6 +740,9 @@ def _kendall_p_exact(n, c, alternative='two-sided'):
     return prob
 
 
+KendalltauResult = namedtuple('KendalltauResult', ('correlation', 'pvalue'))
+
+
 def kendalltau(x, y, use_ties=True, use_missing=False, method='auto',
                alternative='two-sided'):
     """
@@ -829,14 +777,10 @@ def kendalltau(x, y, use_ties=True, use_missing=False, method='auto',
 
     Returns
     -------
-    res : SignificanceResult
-        An object containing attributes:
-
-        statistic : float
-           The tau statistic.
-        pvalue : float
-           The p-value for a hypothesis test whose null hypothesis is
-           an absence of association, tau = 0.
+    correlation : float
+        The Kendall tau statistic
+    pvalue : float
+        The p-value
 
     References
     ----------
@@ -856,9 +800,7 @@ def kendalltau(x, y, use_ties=True, use_missing=False, method='auto',
         n -= int(m.sum())
 
     if n < 2:
-        res = scipy.stats._stats_py.SignificanceResult(np.nan, np.nan)
-        res.correlation = np.nan
-        return res
+        return KendalltauResult(np.nan, np.nan)
 
     rx = ma.masked_equal(rankdata(x, use_missing=use_missing), 0)
     ry = ma.masked_equal(rankdata(y, use_missing=use_missing), 0)
@@ -895,8 +837,8 @@ def kendalltau(x, y, use_ties=True, use_missing=False, method='auto',
         if use_ties:
             var_s -= np.sum([v*k*(k-1)*(2*k+5)*1. for (k,v) in xties.items()])
             var_s -= np.sum([v*k*(k-1)*(2*k+5)*1. for (k,v) in yties.items()])
-            v1 = (np.sum([v*k*(k-1) for (k, v) in xties.items()], dtype=float) *
-                  np.sum([v*k*(k-1) for (k, v) in yties.items()], dtype=float))
+            v1 = np.sum([v*k*(k-1) for (k, v) in xties.items()], dtype=float) *\
+                 np.sum([v*k*(k-1) for (k, v) in yties.items()], dtype=float)
             v1 /= 2.*n*(n-1)
             if n > 2:
                 v2 = np.sum([v*k*(k-1)*(k-2) for (k,v) in xties.items()],
@@ -912,14 +854,12 @@ def kendalltau(x, y, use_ties=True, use_missing=False, method='auto',
         var_s /= 18.
         var_s += (v1 + v2)
         z = (C-D)/np.sqrt(var_s)
-        prob = scipy.stats._stats_py._get_pvalue(z, distributions.norm, alternative)
+        _, prob = scipy.stats._stats_py._normtest_finish(z, alternative)
     else:
         raise ValueError("Unknown method "+str(method)+" specified, please "
                          "use auto, exact or asymptotic.")
 
-    res = scipy.stats._stats_py.SignificanceResult(tau[()], prob[()])
-    res.correlation = tau
-    return res
+    return KendalltauResult(tau, prob)
 
 
 def kendalltau_seasonal(x):
@@ -954,7 +894,7 @@ def kendalltau_seasonal(x):
         cmb = n_p[j]*(n_p[j]-1)
         for k in range(j,m,1):
             K[j,k] = sum(msign((x[i:,j]-x[i,j])*(x[i:,k]-x[i,k])).sum()
-                         for i in range(n))
+                               for i in range(n))
             covmat[j,k] = (K[j,k] + 4*(R[:,j]*R[:,k]).sum() -
                            n*(n_p[j]+1)*(n_p[k]+1))/3.
             K[k,j] = K[j,k]
@@ -968,7 +908,7 @@ def kendalltau_seasonal(x):
     z_tot_ind = msign(S_tot) * (abs(S_tot)-1) / ma.sqrt(var_szn.sum())
     z_tot_dep = msign(S_tot) * (abs(S_tot)-1) / ma.sqrt(covmat.sum())
 
-    prob_szn = special.erfc(abs(z_szn.data)/np.sqrt(2))
+    prob_szn = special.erfc(abs(z_szn)/np.sqrt(2))
     prob_tot_ind = special.erfc(abs(z_tot_ind)/np.sqrt(2))
     prob_tot_dep = special.erfc(abs(z_tot_dep)/np.sqrt(2))
 
@@ -1147,7 +1087,7 @@ def theilslopes(y, x=None, alpha=0.95, method='separate'):
     else:
         x = ma.asarray(x).flatten()
         if len(x) != len(y):
-            raise ValueError(f"Incompatible lengths ! ({len(y)}<>{len(x)})")
+            raise ValueError("Incompatible lengths ! (%s<>%s)" % (len(y),len(x)))
 
     m = ma.mask_or(ma.getmask(x), ma.getmask(y))
     y._mask = x._mask = m
@@ -1204,7 +1144,7 @@ def siegelslopes(y, x=None, method="hierarchical"):
     else:
         x = ma.asarray(x).ravel()
         if len(x) != len(y):
-            raise ValueError(f"Incompatible lengths ! ({len(y)}<>{len(x)})")
+            raise ValueError("Incompatible lengths ! (%s<>%s)" % (len(y), len(x)))
 
     m = ma.mask_or(ma.getmask(x), ma.getmask(y))
     y._mask = x._mask = m
@@ -1215,116 +1155,7 @@ def siegelslopes(y, x=None, method="hierarchical"):
     return stats_siegelslopes(y, x, method=method)
 
 
-SenSeasonalSlopesResult = _make_tuple_bunch('SenSeasonalSlopesResult',
-                                            ['intra_slope', 'inter_slope'])
-
-
 def sen_seasonal_slopes(x):
-    r"""
-    Computes seasonal Theil-Sen and Kendall slope estimators.
-
-    The seasonal generalization of Sen's slope computes the slopes between all
-    pairs of values within a "season" (column) of a 2D array. It returns an
-    array containing the median of these "within-season" slopes for each
-    season (the Theil-Sen slope estimator of each season), and it returns the
-    median of the within-season slopes across all seasons (the seasonal Kendall
-    slope estimator).
-
-    Parameters
-    ----------
-    x : 2D array_like
-        Each column of `x` contains measurements of the dependent variable
-        within a season. The independent variable (usually time) of each season
-        is assumed to be ``np.arange(x.shape[0])``.
-
-    Returns
-    -------
-    result : ``SenSeasonalSlopesResult`` instance
-        The return value is an object with the following attributes:
-
-        intra_slope : ndarray
-            For each season, the Theil-Sen slope estimator: the median of
-            within-season slopes.
-        inter_slope : float
-            The seasonal Kendall slope estimateor: the median of within-season
-            slopes *across all* seasons.
-
-    See Also
-    --------
-    theilslopes : the analogous function for non-seasonal data
-    scipy.stats.theilslopes : non-seasonal slopes for non-masked arrays
-
-    Notes
-    -----
-    The slopes :math:`d_{ijk}` within season :math:`i` are:
-
-    .. math::
-
-        d_{ijk} = \frac{x_{ij} - x_{ik}}
-                            {j - k}
-
-    for pairs of distinct integer indices :math:`j, k` of :math:`x`.
-
-    Element :math:`i` of the returned `intra_slope` array is the median of the
-    :math:`d_{ijk}` over all :math:`j < k`; this is the Theil-Sen slope
-    estimator of season :math:`i`. The returned `inter_slope` value, better
-    known as the seasonal Kendall slope estimator, is the median of the
-    :math:`d_{ijk}` over all :math:`i, j, k`.
-
-    References
-    ----------
-    .. [1] Hirsch, Robert M., James R. Slack, and Richard A. Smith.
-           "Techniques of trend analysis for monthly water quality data."
-           *Water Resources Research* 18.1 (1982): 107-121.
-
-    Examples
-    --------
-    Suppose we have 100 observations of a dependent variable for each of four
-    seasons:
-
-    >>> import numpy as np
-    >>> rng = np.random.default_rng()
-    >>> x = rng.random(size=(100, 4))
-
-    We compute the seasonal slopes as:
-
-    >>> from scipy import stats
-    >>> intra_slope, inter_slope = stats.mstats.sen_seasonal_slopes(x)
-
-    If we define a function to compute all slopes between observations within
-    a season:
-
-    >>> def dijk(yi):
-    ...     n = len(yi)
-    ...     x = np.arange(n)
-    ...     dy = yi - yi[:, np.newaxis]
-    ...     dx = x - x[:, np.newaxis]
-    ...     # we only want unique pairs of distinct indices
-    ...     mask = np.triu(np.ones((n, n), dtype=bool), k=1)
-    ...     return dy[mask]/dx[mask]
-
-    then element ``i`` of ``intra_slope`` is the median of ``dijk[x[:, i]]``:
-
-    >>> i = 2
-    >>> np.allclose(np.median(dijk(x[:, i])), intra_slope[i])
-    True
-
-    and ``inter_slope`` is the median of the values returned by ``dijk`` for
-    all seasons:
-
-    >>> all_slopes = np.concatenate([dijk(x[:, i]) for i in range(x.shape[1])])
-    >>> np.allclose(np.median(all_slopes), inter_slope)
-    True
-
-    Because the data are randomly generated, we would expect the median slopes
-    to be nearly zero both within and across all seasons, and indeed they are:
-
-    >>> intra_slope.data
-    array([ 0.00124504, -0.00277761, -0.00221245, -0.00036338])
-    >>> inter_slope
-    -0.0010511779872922058
-
-    """
     x = ma.array(x, subok=True, copy=False, ndmin=2)
     (n,_) = x.shape
     # Get list of slopes per season
@@ -1332,7 +1163,7 @@ def sen_seasonal_slopes(x):
                             for i in range(n)])
     szn_medslopes = ma.median(szn_slopes, axis=0)
     medslope = ma.median(szn_slopes, axis=None)
-    return SenSeasonalSlopesResult(szn_medslopes, medslope)
+    return szn_medslopes, medslope
 
 
 Ttest_1sampResult = namedtuple('Ttest_1sampResult', ('statistic', 'pvalue'))
@@ -1390,7 +1221,7 @@ def ttest_1samp(a, popmean, axis=0, alternative='two-sided'):
     with np.errstate(divide='ignore', invalid='ignore'):
         t = (x - popmean) / ma.sqrt(svar / n)
 
-    t, prob = _ttest_finish(df, t, alternative)
+    t, prob = scipy.stats._stats_py._ttest_finish(df, t, alternative)
     return Ttest_1sampResult(t, prob)
 
 
@@ -1474,7 +1305,7 @@ def ttest_ind(a, b, axis=0, equal_var=True, alternative='two-sided'):
     with np.errstate(divide='ignore', invalid='ignore'):
         t = (x1-x2) / denom
 
-    t, prob = _ttest_finish(df, t, alternative)
+    t, prob = scipy.stats._stats_py._ttest_finish(df, t, alternative)
     return Ttest_indResult(t, prob)
 
 
@@ -1535,7 +1366,7 @@ def ttest_rel(a, b, axis=0, alternative='two-sided'):
     with np.errstate(divide='ignore', invalid='ignore'):
         t = dm / denom
 
-    t, prob = _ttest_finish(df, t, alternative)
+    t, prob = scipy.stats._stats_py._ttest_finish(df, t, alternative)
     return Ttest_relResult(t, prob)
 
 
@@ -1626,7 +1457,7 @@ def kruskal(*args):
     >>> b = [6.9, 7.0, 6.1, 7.9]
     >>> c = [7.2, 6.9, 6.1, 6.5]
 
-    Test the hypothesis that the distribution functions for all of the brands'
+    Test the hypotesis that the distribution functions for all of the brands'
     durations are identical. Use 5% level of significance.
 
     >>> kruskal(a, b, c)
@@ -1784,7 +1615,6 @@ def trima(a, limits=None, inclusive=(True,True)):
     Examples
     --------
     >>> from scipy.stats.mstats import trima
-    >>> import numpy as np
 
     >>> a = np.arange(10)
 
@@ -2247,7 +2077,6 @@ def tmean(a, limits=None, inclusive=(True, True), axis=None):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 9, 1, 2],
@@ -2341,7 +2170,6 @@ def tmin(a, lowerlimit=None, axis=0, inclusive=True):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 2, 1, 2],
@@ -2392,7 +2220,6 @@ def tmax(a, upperlimit=None, axis=0, inclusive=True):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats import mstats
     >>> a = np.array([[6, 8, 3, 0],
     ...               [3, 9, 1, 2],
@@ -2502,7 +2329,6 @@ def winsorize(a, limits=None, inclusive=(True, True), inplace=False,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats.mstats import winsorize
 
     A shuffled array contains integers from 1 to 10.
@@ -2543,7 +2369,7 @@ def winsorize(a, limits=None, inclusive=(True, True), inplace=False,
                 a[idx[upidx:]] = a[idx[upidx - 1]]
         return a
 
-    contains_nan, nan_policy = _contains_nan(a, nan_policy)
+    contains_nan, nan_policy = scipy.stats._stats_py._contains_nan(a, nan_policy)
     # We are going to modify a: better make a copy
     a = ma.array(a, copy=np.logical_not(inplace))
 
@@ -2606,7 +2432,7 @@ def moment(a, moment=1, axis=0):
         dtype = a.dtype.type if a.dtype.kind in 'fc' else np.float64
         # empty array, return nan(s) with shape matching `moment`
         out_shape = (moment_shape if np.isscalar(moment)
-                     else [len(moment)] + moment_shape)
+                    else [len(moment)] + moment_shape)
         if len(out_shape) == 0:
             return dtype(np.nan)
         else:
@@ -2619,7 +2445,6 @@ def moment(a, moment=1, axis=0):
         return ma.array(mmnt)
     else:
         return _moment(a, moment, axis)
-
 
 # Moment with optional pre-computed mean, equal to a.mean(axis, keepdims=True)
 def _moment(a, moment, axis, *, mean=None):
@@ -2699,7 +2524,6 @@ def variation(a, axis=0, ddof=0):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats.mstats import variation
     >>> a = np.array([2,8,4])
     >>> variation(a)
@@ -2868,7 +2692,6 @@ def describe(a, axis=0, ddof=0, bias=True):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats.mstats import describe
     >>> ma = np.ma.array(range(6), mask=[0, 0, 0, 1, 1, 1])
     >>> describe(ma)
@@ -2979,9 +2802,8 @@ def skewtest(a, axis=0, alternative='two-sided'):
     alpha = ma.sqrt(2.0/(W2-1))
     y = ma.where(y == 0, 1, y)
     Z = delta*ma.log(y/alpha + ma.sqrt((y/alpha)**2+1))
-    pvalue = scipy.stats._stats_py._get_pvalue(Z, distributions.norm, alternative)
 
-    return SkewtestResult(Z[()], pvalue[()])
+    return SkewtestResult(*scipy.stats._stats_py._normtest_finish(Z, alternative))
 
 
 KurtosistestResult = namedtuple('KurtosistestResult', ('statistic', 'pvalue'))
@@ -3031,9 +2853,8 @@ def kurtosistest(a, axis=0, alternative='two-sided'):
             " were given." % np.min(n))
     if np.min(n) < 20:
         warnings.warn(
-            "kurtosistest only valid for n>=20 ... continuing anyway, n=%i" % np.min(n),
-            stacklevel=2,
-        )
+            "kurtosistest only valid for n>=20 ... continuing anyway, n=%i" %
+            np.min(n))
 
     b2 = kurtosis(a, axis, fisher=False)
     E = 3.0*(n-1) / (n+1)
@@ -3053,9 +2874,10 @@ def kurtosistest(a, axis=0, alternative='two-sided'):
     term2 = np.ma.where(denom > 0, ma.power((1-2.0/A)/denom, 1/3.0),
                         -ma.power(-(1-2.0/A)/denom, 1/3.0))
     Z = (term1 - term2) / np.sqrt(2/(9.0*A))
-    pvalue = scipy.stats._stats_py._get_pvalue(Z, distributions.norm, alternative)
 
-    return KurtosistestResult(Z[()], pvalue[()])
+    return KurtosistestResult(
+        *scipy.stats._stats_py._normtest_finish(Z, alternative)
+    )
 
 
 NormaltestResult = namedtuple('NormaltestResult', ('statistic', 'pvalue'))
@@ -3163,7 +2985,6 @@ def mquantiles(a, prob=list([.25,.5,.75]), alphap=.4, betap=.4, axis=None,
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.stats.mstats import mquantiles
     >>> a = np.array([6., 47., 49., 15., 42., 41., 7., 39., 43., 40., 36.])
     >>> mquantiles(a)
@@ -3214,7 +3035,7 @@ def mquantiles(a, prob=list([.25,.5,.75]), alphap=.4, betap=.4, axis=None,
         condition = (limit[0] < data) & (data < limit[1])
         data[~condition.filled(True)] = masked
 
-    p = np.atleast_1d(np.asarray(prob))
+    p = np.array(prob, copy=False, ndmin=1)
     m = alphap + p*(1.-alphap-betap)
     # Computes quantiles along axis (or globally)
     if (axis is None):
@@ -3352,7 +3173,6 @@ def sem(a, axis=0, ddof=1):
     --------
     Find standard error along the first axis:
 
-    >>> import numpy as np
     >>> from scipy import stats
     >>> a = np.arange(20).reshape(5,4)
     >>> print(stats.mstats.sem(a))
@@ -3464,17 +3284,9 @@ BrunnerMunzelResult = namedtuple('BrunnerMunzelResult', ('statistic', 'pvalue'))
 
 def brunnermunzel(x, y, alternative="two-sided", distribution="t"):
     """
-    Compute the Brunner-Munzel test on samples x and y.
+    Computes the Brunner-Munzel test on samples x and y
 
-    Any missing values in `x` and/or `y` are discarded.
-
-    The Brunner-Munzel test is a nonparametric test of the null hypothesis that
-    when values are taken one by one from each group, the probabilities of
-    getting large values in both groups are equal.
-    Unlike the Wilcoxon-Mann-Whitney's U test, this does not require the
-    assumption of equivariance of two groups. Note that this does not assume
-    the distributions are same. This test works on two independent samples,
-    which may have different sizes.
+    Missing values in `x` and/or `y` are discarded.
 
     Parameters
     ----------
@@ -3505,16 +3317,7 @@ def brunnermunzel(x, y, alternative="two-sided", distribution="t"):
     -----
     For more details on `brunnermunzel`, see `scipy.stats.brunnermunzel`.
 
-    Examples
-    --------
-    >>> from scipy.stats.mstats import brunnermunzel
-    >>> import numpy as np
-    >>> x1 = [1, 2, np.nan, np.nan, 1, 1, 1, 1, 1, 1, 2, 4, 1, 1]
-    >>> x2 = [3, 3, 4, 3, 1, 2, 3, 1, 1, 5, 4]
-    >>> brunnermunzel(x1, x2)
-    BrunnerMunzelResult(statistic=1.4723186918922935, pvalue=0.15479415300426624)  # may vary
-
-    """  # noqa: E501
+    """
     x = ma.asarray(x).compressed().view(ndarray)
     y = ma.asarray(y).compressed().view(ndarray)
     nx = len(x)

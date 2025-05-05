@@ -84,8 +84,7 @@ class HBInfo:
             elif values.dtype.kind in np.typecodes["AllInteger"]:
                 values_fmt = IntFormat.from_number(-np.max(np.abs(values)))
             else:
-                message = f"type {values.dtype.kind} not implemented yet"
-                raise NotImplementedError(message)
+                raise NotImplementedError("type %s not implemented yet" % values.dtype.kind)
         else:
             raise NotImplementedError("fmt argument not supported yet.")
 
@@ -222,8 +221,7 @@ class HBInfo:
         if key is None:
             key = "|No Key"
         if len(key) > 8:
-            warnings.warn("key is > 8 characters (key is %s)" % key,
-                          LineOverflow, stacklevel=3)
+            warnings.warn("key is > 8 characters (key is %s)" % key, LineOverflow)
 
         self.total_nlines = total_nlines
         self.pointer_nlines = pointer_nlines
@@ -244,17 +242,17 @@ class HBInfo:
         values_format = parser.parse(values_format_str)
         if isinstance(values_format, ExpFormat):
             if mxtype.value_type not in ["real", "complex"]:
-                raise ValueError(f"Inconsistency between matrix type {mxtype} and "
-                                 f"value type {values_format}")
+                raise ValueError("Inconsistency between matrix type %s and "
+                                 "value type %s" % (mxtype, values_format))
             values_dtype = np.float64
         elif isinstance(values_format, IntFormat):
             if mxtype.value_type not in ["integer"]:
-                raise ValueError(f"Inconsistency between matrix type {mxtype} and "
-                                 f"value type {values_format}")
+                raise ValueError("Inconsistency between matrix type %s and "
+                                 "value type %s" % (mxtype, values_format))
             # XXX: fortran int -> dtype association ?
             values_dtype = int
         else:
-            raise ValueError(f"Unsupported format for values {values_format!r}")
+            raise ValueError("Unsupported format for values %r" % (values_format,))
 
         self.pointer_format = pointer_format
         self.indices_format = indices_format
@@ -381,9 +379,9 @@ class HBMatrixType:
         "elemental": "E",
     }
 
-    _f2q_type = {j: i for i, j in _q2f_type.items()}
-    _f2q_structure = {j: i for i, j in _q2f_structure.items()}
-    _f2q_storage = {j: i for i, j in _q2f_storage.items()}
+    _f2q_type = dict([(j, i) for i, j in _q2f_type.items()])
+    _f2q_structure = dict([(j, i) for i, j in _q2f_structure.items()])
+    _f2q_storage = dict([(j, i) for i, j in _q2f_storage.items()])
 
     @classmethod
     def from_fortran(cls, fmt):
@@ -417,7 +415,8 @@ class HBMatrixType:
                self._q2f_storage[self.storage]
 
     def __repr__(self):
-        return f"HBMatrixType({self.value_type}, {self.structure}, {self.storage})"
+        return "HBMatrixType(%s, %s, %s)" % \
+               (self.value_type, self.structure, self.storage)
 
 
 class HBFile:
@@ -494,7 +493,7 @@ def hb_read(path_or_open_file):
     --------
     We can read and write a harwell-boeing format file:
 
-    >>> from scipy.io import hb_read, hb_write
+    >>> from scipy.io.harwell_boeing import hb_read, hb_write
     >>> from scipy.sparse import csr_matrix, eye
     >>> data = csr_matrix(eye(3))  # create a sparse matrix
     >>> hb_write("data.hb", data)  # write a hb file
@@ -545,7 +544,7 @@ def hb_write(path_or_open_file, m, hb_info=None):
     --------
     We can read and write a harwell-boeing format file:
 
-    >>> from scipy.io import hb_read, hb_write
+    >>> from scipy.io.harwell_boeing import hb_read, hb_write
     >>> from scipy.sparse import csr_matrix, eye
     >>> data = csr_matrix(eye(3))  # create a sparse matrix
     >>> hb_write("data.hb", data)  # write a hb file

@@ -1,3 +1,4 @@
+
 import sys as _sys
 from keyword import iskeyword as _iskeyword
 
@@ -9,7 +10,7 @@ def _validate_names(typename, field_names, extra_field_names):
     among field_names + extra_field_names.
     """
     for name in [typename] + field_names + extra_field_names:
-        if not isinstance(name, str):
+        if type(name) is not str:
             raise TypeError('typename and all field names must be strings')
         if not name.isidentifier():
             raise ValueError('typename and all field names must be valid '

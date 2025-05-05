@@ -5,8 +5,7 @@ import warnings
 import numpy as np
 import scipy.linalg
 from ._optimize import (_check_unknown_options, _status_message,
-                        OptimizeResult, _prepare_scalar_function,
-                        _call_callback_maybe_halt)
+                       OptimizeResult, _prepare_scalar_function)
 from scipy.optimize._hessian_update_strategy import HessianUpdateStrategy
 from scipy.optimize._differentiable_functions import FD_METHODS
 __all__ = []
@@ -89,7 +88,7 @@ class BaseQuadraticSubproblem:
 
     def get_boundaries_intersections(self, z, d, trust_radius):
         """
-        Solve the scalar quadratic equation ``||z + t d|| == trust_radius``.
+        Solve the scalar quadratic equation ||z + t d|| == trust_radius.
         This is like a line-sphere intersection.
         Return the two values of t, sorted from low to high.
         """
@@ -256,11 +255,9 @@ def _minimize_trust_region(fun, x0, args=(), jac=None, hess=None, hessp=None,
         # append the best guess, call back, increment the iteration count
         if return_all:
             allvecs.append(np.copy(x))
+        if callback is not None:
+            callback(np.copy(x))
         k += 1
-
-        intermediate_result = OptimizeResult(x=x, fun=m.fun)
-        if _call_callback_maybe_halt(callback, intermediate_result):
-            break
 
         # check if the gradient is small enough to stop
         if m.jac_mag < gtol:
@@ -283,7 +280,7 @@ def _minimize_trust_region(fun, x0, args=(), jac=None, hess=None, hessp=None,
         if warnflag == 0:
             print(status_messages[warnflag])
         else:
-            warnings.warn(status_messages[warnflag], RuntimeWarning, stacklevel=3)
+            warnings.warn(status_messages[warnflag], RuntimeWarning, 3)
         print("         Current function value: %f" % m.fun)
         print("         Iterations: %d" % k)
         print("         Function evaluations: %d" % sf.nfev)

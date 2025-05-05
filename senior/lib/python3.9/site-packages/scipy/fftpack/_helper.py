@@ -1,10 +1,7 @@
 import operator
-
-import numpy as np
-from numpy.fft import fftshift, ifftshift, fftfreq
-
+from numpy.fft.helper import fftshift, ifftshift, fftfreq
 import scipy.fft._pocketfft.helper as _helper
-
+import numpy as np
 __all__ = ['fftshift', 'ifftshift', 'fftfreq', 'rfftfreq', 'next_fast_len']
 
 
@@ -32,7 +29,6 @@ def rfftfreq(n, d=1.0):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import fftpack
     >>> sig = np.array([-2, 8, 6, 4, 1, 0, 3, 5], dtype=float)
     >>> sig_fft = fftpack.rfft(sig)
@@ -79,7 +75,6 @@ def next_fast_len(target):
     On a particular machine, an FFT of prime length takes 133 ms:
 
     >>> from scipy import fftpack
-    >>> import numpy as np
     >>> rng = np.random.default_rng()
     >>> min_len = 10007  # prime length is worst case for speed
     >>> a = rng.standard_normal(min_len)

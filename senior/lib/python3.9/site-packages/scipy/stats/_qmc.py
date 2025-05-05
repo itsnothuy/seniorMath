@@ -7,12 +7,14 @@ import numbers
 import os
 import warnings
 from abc import ABC, abstractmethod
-from functools import partial
 from typing import (
     Callable,
     ClassVar,
-    Literal,
+    Dict,
+    List,
+    Optional,
     overload,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -20,13 +22,13 @@ import numpy as np
 
 if TYPE_CHECKING:
     import numpy.typing as npt
+    from typing_extensions import Literal
     from scipy._lib._util import (
         DecimalNumber, GeneratorType, IntNumber, SeedType
     )
 
 import scipy.stats as stats
-from scipy._lib._util import rng_integers, _rng_spawn
-from scipy.sparse.csgraph import minimum_spanning_tree
+from scipy._lib._util import rng_integers
 from scipy.spatial import distance, Voronoi
 from scipy.special import gammainc
 from ._sobol import (
@@ -44,15 +46,14 @@ from ._qmc_cy import (
 )
 
 
-__all__ = ['scale', 'discrepancy', 'geometric_discrepancy', 'update_discrepancy',
+__all__ = ['scale', 'discrepancy', 'update_discrepancy',
            'QMCEngine', 'Sobol', 'Halton', 'LatinHypercube', 'PoissonDisk',
            'MultinomialQMC', 'MultivariateNormalQMC']
 
 
 @overload
-def check_random_state(seed: IntNumber | None = ...) -> np.random.Generator:
+def check_random_state(seed: Optional[IntNumber] = ...) -> np.random.Generator:
     ...
-
 
 @overload
 def check_random_state(seed: GeneratorType) -> GeneratorType:
@@ -65,11 +66,14 @@ def check_random_state(seed=None):
 
     Parameters
     ----------
-    seed : {None, int, `numpy.random.Generator`, `numpy.random.RandomState`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` or ``RandomState`` instance, then
-        the provided instance is used.
+    seed : {None, int, `numpy.random.Generator`,
+            `numpy.random.RandomState`}, optional
+
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` or ``RandomState`` instance then
+        that instance is used.
 
     Returns
     -------
@@ -169,36 +173,6 @@ def scale(
         return (sample - lower) / (upper - lower)
 
 
-def _ensure_in_unit_hypercube(sample: npt.ArrayLike) -> np.ndarray:
-    """Ensure that sample is a 2D array and is within a unit hypercube
-
-    Parameters
-    ----------
-    sample : array_like (n, d)
-        A 2D array of points.
-
-    Returns
-    -------
-    np.ndarray
-        The array interpretation of the input sample
-
-    Raises
-    ------
-    ValueError
-        If the input is not a 2D array or contains points outside of
-        a unit hypercube.
-    """
-    sample = np.asarray(sample, dtype=np.float64, order="C")
-
-    if not sample.ndim == 2:
-        raise ValueError("Sample is not a 2D array")
-
-    if (sample.max() > 1.) or (sample.min() < 0.):
-        raise ValueError("Sample is not in unit hypercube")
-
-    return sample
-
-
 def discrepancy(
         sample: npt.ArrayLike,
         *,
@@ -225,10 +199,6 @@ def discrepancy(
     -------
     discrepancy : float
         Discrepancy.
-
-    See Also
-    --------
-    geometric_discrepancy
 
     Notes
     -----
@@ -290,7 +260,6 @@ def discrepancy(
     --------
     Calculate the quality of the sample using the discrepancy:
 
-    >>> import numpy as np
     >>> from scipy.stats import qmc
     >>> space = np.array([[1, 3], [2, 6], [3, 2], [4, 5], [5, 1], [6, 4]])
     >>> l_bounds = [0.5, 0.5]
@@ -316,7 +285,14 @@ def discrepancy(
     0.008142039609053513
 
     """
-    sample = _ensure_in_unit_hypercube(sample)
+    sample = np.asarray(sample, dtype=np.float64, order="C")
+
+    # Checking that sample is within the hypercube and 2D
+    if not sample.ndim == 2:
+        raise ValueError("Sample is not a 2D array")
+
+    if (sample.max() > 1.) or (sample.min() < 0.):
+        raise ValueError("Sample is not in unit hypercube")
 
     workers = _validate_workers(workers)
 
@@ -332,131 +308,6 @@ def discrepancy(
     else:
         raise ValueError(f"{method!r} is not a valid method. It must be one of"
                          f" {set(methods)!r}")
-
-
-def geometric_discrepancy(
-        sample: npt.ArrayLike,
-        method: Literal["mindist", "mst"] = "mindist",
-        metric: str = "euclidean") -> float:
-    """Discrepancy of a given sample based on its geometric properties.
-
-    Parameters
-    ----------
-    sample : array_like (n, d)
-        The sample to compute the discrepancy from.
-    method : {"mindist", "mst"}, optional
-        The method to use. One of ``mindist`` for minimum distance (default)
-        or ``mst`` for minimum spanning tree.
-    metric : str or callable, optional
-        The distance metric to use. See the documentation
-        for `scipy.spatial.distance.pdist` for the available metrics and
-        the default.
-
-    Returns
-    -------
-    discrepancy : float
-        Discrepancy (higher values correspond to greater sample uniformity).
-
-    See Also
-    --------
-    discrepancy
-
-    Notes
-    -----
-    The discrepancy can serve as a simple measure of quality of a random sample.
-    This measure is based on the geometric properties of the distribution of points
-    in the sample, such as the minimum distance between any pair of points, or
-    the mean edge length in a minimum spanning tree.
-
-    The higher the value is, the better the coverage of the parameter space is.
-    Note that this is different from `scipy.stats.qmc.discrepancy`, where lower
-    values correspond to higher quality of the sample.
-
-    Also note that when comparing different sampling strategies using this function,
-    the sample size must be kept constant.
-
-    It is possible to calculate two metrics from the minimum spanning tree:
-    the mean edge length and the standard deviation of edges lengths. Using
-    both metrics offers a better picture of uniformity than either metric alone,
-    with higher mean and lower standard deviation being preferable (see [1]_
-    for a brief discussion). This function currently only calculates the mean
-    edge length.
-
-    References
-    ----------
-    .. [1] Franco J. et al. "Minimum Spanning Tree: A new approach to assess the quality
-       of the design of computer experiments." Chemometrics and Intelligent Laboratory
-       Systems, 97 (2), pp. 164-169, 2009.
-
-    Examples
-    --------
-    Calculate the quality of the sample using the minimum euclidean distance
-    (the defaults):
-
-    >>> import numpy as np
-    >>> from scipy.stats import qmc
-    >>> rng = np.random.default_rng(191468432622931918890291693003068437394)
-    >>> sample = qmc.LatinHypercube(d=2, seed=rng).random(50)
-    >>> qmc.geometric_discrepancy(sample)
-    0.03708161435687876
-
-    Calculate the quality using the mean edge length in the minimum
-    spanning tree:
-
-    >>> qmc.geometric_discrepancy(sample, method='mst')
-    0.1105149978798376
-
-    Display the minimum spanning tree and the points with
-    the smallest distance:
-
-    >>> import matplotlib.pyplot as plt
-    >>> from matplotlib.lines import Line2D
-    >>> from scipy.sparse.csgraph import minimum_spanning_tree
-    >>> from scipy.spatial.distance import pdist, squareform
-    >>> dist = pdist(sample)
-    >>> mst = minimum_spanning_tree(squareform(dist))
-    >>> edges = np.where(mst.toarray() > 0)
-    >>> edges = np.asarray(edges).T
-    >>> min_dist = np.min(dist)
-    >>> min_idx = np.argwhere(squareform(dist) == min_dist)[0]
-    >>> fig, ax = plt.subplots(figsize=(10, 5))
-    >>> _ = ax.set(aspect='equal', xlabel=r'$x_1$', ylabel=r'$x_2$',
-    ...            xlim=[0, 1], ylim=[0, 1])
-    >>> for edge in edges:
-    ...     ax.plot(sample[edge, 0], sample[edge, 1], c='k')
-    >>> ax.scatter(sample[:, 0], sample[:, 1])
-    >>> ax.add_patch(plt.Circle(sample[min_idx[0]], min_dist, color='red', fill=False))
-    >>> markers = [
-    ...     Line2D([0], [0], marker='o', lw=0, label='Sample points'),
-    ...     Line2D([0], [0], color='k', label='Minimum spanning tree'),
-    ...     Line2D([0], [0], marker='o', lw=0, markerfacecolor='w', markeredgecolor='r',
-    ...            label='Minimum point-to-point distance'),
-    ... ]
-    >>> ax.legend(handles=markers, loc='center left', bbox_to_anchor=(1, 0.5));
-    >>> plt.show()
-
-    """
-    sample = _ensure_in_unit_hypercube(sample)
-    if sample.shape[0] < 2:
-        raise ValueError("Sample must contain at least two points")
-
-    distances = distance.pdist(sample, metric=metric)  # type: ignore[call-overload]
-
-    if np.any(distances == 0.0):
-        warnings.warn("Sample contains duplicate points.", stacklevel=2)
-
-    if method == "mindist":
-        return np.min(distances[distances.nonzero()])
-    elif method == "mst":
-        fully_connected_graph = distance.squareform(distances)
-        mst = minimum_spanning_tree(fully_connected_graph)
-        distances = mst[mst.nonzero()]
-        # TODO consider returning both the mean and the standard deviation
-        # see [1] for a discussion
-        return np.mean(distances)
-    else:
-        raise ValueError(f"{method!r} is not a valid method. "
-                         f"It must be one of {{'mindist', 'mst'}}")
 
 
 def update_discrepancy(
@@ -484,7 +335,6 @@ def update_discrepancy(
     We can also compute iteratively the discrepancy by using
     ``iterative=True``.
 
-    >>> import numpy as np
     >>> from scipy.stats import qmc
     >>> space = np.array([[1, 3], [2, 6], [3, 2], [4, 5], [5, 1], [6, 4]])
     >>> l_bounds = [0.5, 0.5]
@@ -642,7 +492,7 @@ def primes_from_2_to(n: int) -> np.ndarray:
     return np.r_[2, 3, ((3 * np.nonzero(sieve)[0][1:] + 1) | 1)]
 
 
-def n_primes(n: IntNumber) -> list[int]:
+def n_primes(n: IntNumber) -> List[int]:
     """List of the n-first prime numbers.
 
     Parameters
@@ -681,51 +531,12 @@ def n_primes(n: IntNumber) -> list[int]:
     return primes
 
 
-def _van_der_corput_permutations(
-    base: IntNumber, *, random_state: SeedType = None
-) -> np.ndarray:
-    """Permutations for scrambling a Van der Corput sequence.
-
-    Parameters
-    ----------
-    base : int
-        Base of the sequence.
-    random_state : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
-
-    Returns
-    -------
-    permutations : array_like
-        Permutation indices.
-
-    Notes
-    -----
-    In Algorithm 1 of Owen 2017, a permutation of `np.arange(base)` is
-    created for each positive integer `k` such that `1 - base**-k < 1`
-    using floating-point arithmetic. For double precision floats, the
-    condition `1 - base**-k < 1` can also be written as `base**-k >
-    2**-54`, which makes it more apparent how many permutations we need
-    to create.
-    """
-    rng = check_random_state(random_state)
-    count = math.ceil(54 / math.log2(base)) - 1
-    permutations = np.repeat(np.arange(base)[None], count, axis=0)
-    for perm in permutations:
-        rng.shuffle(perm)
-
-    return permutations
-
-
 def van_der_corput(
         n: IntNumber,
         base: IntNumber = 2,
         *,
         start_index: IntNumber = 0,
         scramble: bool = False,
-        permutations: npt.ArrayLike | None = None,
         seed: SeedType = None,
         workers: IntNumber = 1) -> np.ndarray:
     """Van der Corput sequence.
@@ -747,13 +558,12 @@ def van_der_corput(
     scramble : bool, optional
         If True, use Owen scrambling. Otherwise no scrambling is done.
         Default is True.
-    permutations : array_like, optional
-        Permutations used for scrambling.
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
     workers : int, optional
         Number of workers to use for parallel processing. If -1 is
         given all CPU threads are used. Default is 1.
@@ -773,14 +583,18 @@ def van_der_corput(
         raise ValueError("'base' must be at least 2")
 
     if scramble:
-        if permutations is None:
-            permutations = _van_der_corput_permutations(
-                base=base, random_state=seed
-            )
-        else:
-            permutations = np.asarray(permutations)
+        rng = check_random_state(seed)
+        # In Algorithm 1 of Owen 2017, a permutation of `np.arange(base)` is
+        # created for each positive integer `k` such that `1 - base**-k < 1`
+        # using floating-point arithmetic. For double precision floats, the
+        # condition `1 - base**-k < 1` can also be written as `base**-k >
+        # 2**-54`, which makes it more apparent how many permutations we need
+        # to create.
+        count = math.ceil(54 / math.log2(base)) - 1
+        permutations = np.repeat(np.arange(base)[None], count, axis=0)
+        for perm in permutations:
+            rng.shuffle(perm)
 
-        permutations = permutations.astype(np.int64)
         return _cy_van_der_corput_scrambled(n, base, start_index,
                                             permutations, workers)
 
@@ -798,26 +612,12 @@ class QMCEngine(ABC):
     ----------
     d : int
         Dimension of the parameter space.
-    optimization : {None, "random-cd", "lloyd"}, optional
-        Whether to use an optimization scheme to improve the quality after
-        sampling. Note that this is a post-processing step that does not
-        guarantee that all properties of the sample will be conserved.
-        Default is None.
-
-        * ``random-cd``: random permutations of coordinates to lower the
-          centered discrepancy. The best sample based on the centered
-          discrepancy is constantly updated. Centered discrepancy-based
-          sampling shows better space-filling robustness toward 2D and 3D
-          subprojections compared to using other discrepancy measures.
-        * ``lloyd``: Perturb samples using a modified Lloyd-Max algorithm.
-          The process converges to equally spaced samples.
-
-        .. versionadded:: 1.10.0
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Notes
     -----
@@ -834,8 +634,8 @@ class QMCEngine(ABC):
     * ``__init__(d, seed=None)``: at least fix the dimension. If the sampler
       does not take advantage of a ``seed`` (deterministic methods like
       Halton), this parameter can be omitted.
-    * ``_random(n, *, workers=1)``: draw ``n`` from the engine. ``workers``
-      is used for parallelism. See `Halton` for example.
+    * ``random(n)``: draw ``n`` from the engine and increase the counter
+      ``num_generated`` by ``n``.
 
     Optionally, two other methods can be overwritten by subclasses:
 
@@ -854,7 +654,8 @@ class QMCEngine(ABC):
     ...         super().__init__(d=d, seed=seed)
     ...
     ...
-    ...     def _random(self, n=1, *, workers=1):
+    ...     def random(self, n=1):
+    ...         self.num_generated += n
     ...         return self.rng.random((n, self.d))
     ...
     ...
@@ -892,50 +693,21 @@ class QMCEngine(ABC):
 
     @abstractmethod
     def __init__(
-        self,
-        d: IntNumber,
-        *,
-        optimization: Literal["random-cd", "lloyd"] | None = None,
-        seed: SeedType = None
+            self,
+            d: IntNumber,
+            *,
+            seed: SeedType = None
     ) -> None:
-        if not np.issubdtype(type(d), np.integer) or d < 0:
-            raise ValueError('d must be a non-negative integer value')
+        if not np.issubdtype(type(d), np.integer):
+            raise ValueError('d must be an integer value')
 
         self.d = d
-
-        if isinstance(seed, np.random.Generator):
-            # Spawn a Generator that we can own and reset.
-            self.rng = _rng_spawn(seed, 1)[0]
-        else:
-            # Create our instance of Generator, does not need spawning
-            # Also catch RandomState which cannot be spawned
-            self.rng = check_random_state(seed)
-        self.rng_seed = copy.deepcopy(self.rng)
-
+        self.rng = check_random_state(seed)
+        self.rng_seed = copy.deepcopy(seed)
         self.num_generated = 0
 
-        config = {
-            # random-cd
-            "n_nochange": 100,
-            "n_iters": 10_000,
-            "rng": self.rng,
-
-            # lloyd
-            "tol": 1e-5,
-            "maxiter": 10,
-            "qhull_options": None,
-        }
-        self.optimization_method = _select_optimizer(optimization, config)
-
     @abstractmethod
-    def _random(
-        self, n: IntNumber = 1, *, workers: IntNumber = 1
-    ) -> np.ndarray:
-        ...
-
-    def random(
-        self, n: IntNumber = 1, *, workers: IntNumber = 1
-    ) -> np.ndarray:
+    def random(self, n: IntNumber = 1) -> np.ndarray:
         """Draw `n` in the half-open interval ``[0, 1)``.
 
         Parameters
@@ -943,11 +715,6 @@ class QMCEngine(ABC):
         n : int, optional
             Number of samples to generate in the parameter space.
             Default is 1.
-        workers : int, optional
-            Only supported with `Halton`.
-            Number of workers to use for parallel processing. If -1 is
-            given all CPU threads are used. Default is 1. It becomes faster
-            than one worker for `n` greater than :math:`10^3`.
 
         Returns
         -------
@@ -955,18 +722,13 @@ class QMCEngine(ABC):
             QMC sample.
 
         """
-        sample = self._random(n, workers=workers)
-        if self.optimization_method is not None:
-            sample = self.optimization_method(sample)
-
-        self.num_generated += n
-        return sample
+        # self.num_generated += n
 
     def integers(
         self,
         l_bounds: npt.ArrayLike,
         *,
-        u_bounds: npt.ArrayLike | None = None,
+        u_bounds: Optional[npt.ArrayLike] = None,
         n: IntNumber = 1,
         endpoint: bool = False,
         workers: IntNumber = 1
@@ -1091,26 +853,12 @@ class Halton(QMCEngine):
     scramble : bool, optional
         If True, use Owen scrambling. Otherwise no scrambling is done.
         Default is True.
-    optimization : {None, "random-cd", "lloyd"}, optional
-        Whether to use an optimization scheme to improve the quality after
-        sampling. Note that this is a post-processing step that does not
-        guarantee that all properties of the sample will be conserved.
-        Default is None.
-
-        * ``random-cd``: random permutations of coordinates to lower the
-          centered discrepancy. The best sample based on the centered
-          discrepancy is constantly updated. Centered discrepancy-based
-          sampling shows better space-filling robustness toward 2D and 3D
-          subprojections compared to using other discrepancy measures.
-        * ``lloyd``: Perturb samples using a modified Lloyd-Max algorithm.
-          The process converges to equally spaced samples.
-
-        .. versionadded:: 1.10.0
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Notes
     -----
@@ -1172,37 +920,15 @@ class Halton(QMCEngine):
     """
 
     def __init__(
-        self, d: IntNumber, *, scramble: bool = True,
-        optimization: Literal["random-cd", "lloyd"] | None = None,
-        seed: SeedType = None
+            self, d: IntNumber, *, scramble: bool = True,
+            seed: SeedType = None
     ) -> None:
-        # Used in `scipy.integrate.qmc_quad`
-        self._init_quad = {'d': d, 'scramble': True,
-                           'optimization': optimization}
-        super().__init__(d=d, optimization=optimization, seed=seed)
+        super().__init__(d=d, seed=seed)
         self.seed = seed
-
-        # important to have ``type(bdim) == int`` for performance reason
-        self.base = [int(bdim) for bdim in n_primes(d)]
+        self.base = n_primes(d)
         self.scramble = scramble
 
-        self._initialize_permutations()
-
-    def _initialize_permutations(self) -> None:
-        """Initialize permutations for all Van der Corput sequences.
-
-        Permutations are only needed for scrambling.
-        """
-        self._permutations: list = [None] * len(self.base)
-        if self.scramble:
-            for i, bdim in enumerate(self.base):
-                permutations = _van_der_corput_permutations(
-                    base=bdim, random_state=self.rng
-                )
-
-                self._permutations[i] = permutations
-
-    def _random(
+    def random(
         self, n: IntNumber = 1, *, workers: IntNumber = 1
     ) -> np.ndarray:
         """Draw `n` in the half-open interval ``[0, 1)``.
@@ -1224,12 +950,14 @@ class Halton(QMCEngine):
         """
         workers = _validate_workers(workers)
         # Generate a sample using a Van der Corput sequence per dimension.
-        sample = [van_der_corput(n, bdim, start_index=self.num_generated,
+        # important to have ``type(bdim) == int`` for performance reason
+        sample = [van_der_corput(n, int(bdim), start_index=self.num_generated,
                                  scramble=self.scramble,
-                                 permutations=self._permutations[i],
+                                 seed=copy.deepcopy(self.seed),
                                  workers=workers)
-                  for i, bdim in enumerate(self.base)]
+                  for bdim in self.base]
 
+        self.num_generated += n
         return np.array(sample).T.reshape(n, self.d)
 
 
@@ -1245,35 +973,19 @@ class LatinHypercube(QMCEngine):
     ----------
     d : int
         Dimension of the parameter space.
-    scramble : bool, optional
-        When False, center samples within cells of a multi-dimensional grid.
-        Otherwise, samples are randomly placed within cells of the grid.
-
-        .. note::
-            Setting ``scramble=False`` does not ensure deterministic output.
-            For that, use the `seed` parameter.
-
-        Default is True.
-
-        .. versionadded:: 1.10.0
-
-    optimization : {None, "random-cd", "lloyd"}, optional
-        Whether to use an optimization scheme to improve the quality after
-        sampling. Note that this is a post-processing step that does not
-        guarantee that all properties of the sample will be conserved.
+    centered : bool, optional
+        Center the point within the multi-dimensional grid. Default is False.
+    optimization : {None, "random-cd"}, optional
+        Whether to use an optimization scheme to construct a LHS.
         Default is None.
 
         * ``random-cd``: random permutations of coordinates to lower the
-          centered discrepancy. The best sample based on the centered
+          centered discrepancy [5]_. The best design based on the centered
           discrepancy is constantly updated. Centered discrepancy-based
-          sampling shows better space-filling robustness toward 2D and 3D
-          subprojections compared to using other discrepancy measures.
-        * ``lloyd``: Perturb samples using a modified Lloyd-Max algorithm.
-          The process converges to equally spaced samples.
+          design shows better space filling robustness toward 2D and 3D
+          subprojections compared to using other discrepancy measures [6]_.
 
         .. versionadded:: 1.8.0
-        .. versionchanged:: 1.10.0
-            Add ``lloyd``.
 
     strength : {1, 2}, optional
         Strength of the LHS. ``strength=1`` produces a plain LHS while
@@ -1285,10 +997,11 @@ class LatinHypercube(QMCEngine):
         .. versionadded:: 1.8.0
 
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Notes
     -----
@@ -1305,10 +1018,7 @@ class LatinHypercube(QMCEngine):
     distinct rows occur the same number of times. The elements of :math:`A`
     are in the set :math:`\{0, 1, ..., p-1\}`, also called symbols.
     The constraint that :math:`p` must be a prime number is to allow modular
-    arithmetic. Increasing strength adds some symmetry to the sub-projections
-    of a sample. With strength 2, samples are symmetric along the diagonals of
-    2D sub-projections. This may be undesirable, but on the other hand, the
-    sample dispersion is improved.
+    arithmetic.
 
     Strength 1 (plain LHS) brings an advantage over strength 0 (MC) and
     strength 2 is a useful increment over strength 1. Going to strength 3 is
@@ -1343,56 +1053,36 @@ class LatinHypercube(QMCEngine):
        integration and visualization." Statistica Sinica, 1992.
     .. [8] B. Tang, "Orthogonal Array-Based Latin Hypercubes."
        Journal of the American Statistical Association, 1993.
-    .. [9] Susan K. Seaholm et al. "Latin hypercube sampling and the
-       sensitivity analysis of a Monte Carlo epidemic model".
-       Int J Biomed Comput, 23(1-2), 97-112,
-       :doi:`10.1016/0020-7101(88)90067-0`, 1988.
 
     Examples
     --------
-    In [9]_, a Latin Hypercube sampling strategy was used to sample a
-    parameter space to study the importance of each parameter of an epidemic
-    model. Such analysis is also called a sensitivity analysis.
-
-    Since the dimensionality of the problem is high (6), it is computationally
-    expensive to cover the space. When numerical experiments are costly,
-    QMC enables analysis that may not be possible if using a grid.
-
-    The six parameters of the model represented the probability of illness,
-    the probability of withdrawal, and four contact probabilities,
-    The authors assumed uniform distributions for all parameters and generated
-    50 samples.
-
-    Using `scipy.stats.qmc.LatinHypercube` to replicate the protocol, the
-    first step is to create a sample in the unit hypercube:
+    Generate samples from a Latin hypercube generator.
 
     >>> from scipy.stats import qmc
-    >>> sampler = qmc.LatinHypercube(d=6)
-    >>> sample = sampler.random(n=50)
-
-    Then the sample can be scaled to the appropriate bounds:
-
-    >>> l_bounds = [0.000125, 0.01, 0.0025, 0.05, 0.47, 0.7]
-    >>> u_bounds = [0.000375, 0.03, 0.0075, 0.15, 0.87, 0.9]
-    >>> sample_scaled = qmc.scale(sample, l_bounds, u_bounds)
-
-    Such a sample was used to run the model 50 times, and a polynomial
-    response surface was constructed. This allowed the authors to study the
-    relative importance of each parameter across the range of
-    possibilities of every other parameter.
-    In this computer experiment, they showed a 14-fold reduction in the number
-    of samples required to maintain an error below 2% on their response surface
-    when compared to a grid sampling.
-
-    Below are other examples showing alternative ways to construct LHS
-    with even better coverage of the space.
-
-    Using a base LHS as a baseline.
-
     >>> sampler = qmc.LatinHypercube(d=2)
     >>> sample = sampler.random(n=5)
+    >>> sample
+    array([[0.1545328 , 0.53664833],  # random
+           [0.84052691, 0.06474907],
+           [0.52177809, 0.93343721],
+           [0.68033825, 0.36265316],
+           [0.26544879, 0.61163943]])
+
+    Compute the quality of the sample using the discrepancy criterion.
+
     >>> qmc.discrepancy(sample)
     0.0196...  # random
+
+    Samples can be scaled to bounds.
+
+    >>> l_bounds = [0, 2]
+    >>> u_bounds = [10, 5]
+    >>> qmc.scale(sample, l_bounds, u_bounds)
+    array([[1.54532796, 3.609945  ],  # random
+           [8.40526909, 2.1942472 ],
+           [5.2177809 , 4.80031164],
+           [6.80338249, 3.08795949],
+           [2.65448791, 3.83491828]])
 
     Use the `optimization` keyword argument to produce a LHS with
     lower discrepancy at higher computational cost.
@@ -1418,39 +1108,70 @@ class LatinHypercube(QMCEngine):
     """
 
     def __init__(
-        self, d: IntNumber, *,
-        scramble: bool = True,
+        self, d: IntNumber, *, centered: bool = False,
         strength: int = 1,
-        optimization: Literal["random-cd", "lloyd"] | None = None,
+        optimization: Optional[Literal["random-cd"]] = None,
         seed: SeedType = None
     ) -> None:
-        # Used in `scipy.integrate.qmc_quad`
-        self._init_quad = {'d': d, 'scramble': True, 'strength': strength,
-                           'optimization': optimization}
-        super().__init__(d=d, seed=seed, optimization=optimization)
-        self.scramble = scramble
+        super().__init__(d=d, seed=seed)
+        self.centered = centered
 
         lhs_method_strength = {
-            1: self._random_lhs,
+            1: self._random,
             2: self._random_oa_lhs
         }
 
         try:
-            self.lhs_method: Callable = lhs_method_strength[strength]
+            self.lhs_method = lhs_method_strength[strength]
         except KeyError as exc:
             message = (f"{strength!r} is not a valid strength. It must be one"
                        f" of {set(lhs_method_strength)!r}")
             raise ValueError(message) from exc
 
-    def _random(
-        self, n: IntNumber = 1, *, workers: IntNumber = 1
-    ) -> np.ndarray:
+        optimization_method: Dict[Literal["random-cd"], Callable] = {
+            "random-cd": self._random_cd,
+        }
+
+        self.optimization_method: Optional[Callable]
+        if optimization is not None:
+            try:
+                optimization = optimization.lower()  # type: ignore[assignment]
+                self.optimization_method = optimization_method[optimization]
+            except KeyError as exc:
+                message = (f"{optimization!r} is not a valid optimization"
+                           f" method. It must be one of"
+                           f" {set(optimization_method)!r}")
+                raise ValueError(message) from exc
+
+            self._n_nochange = 100
+            self._n_iters = 10_000
+        else:
+            self.optimization_method = None
+
+    def random(self, n: IntNumber = 1) -> np.ndarray:
+        """Draw `n` in the half-open interval ``[0, 1)``.
+
+        Parameters
+        ----------
+        n : int, optional
+            Number of samples to generate in the parameter space. Default is 1.
+
+        Returns
+        -------
+        sample : array_like (n, d)
+            LHS sample.
+
+        """
         lhs = self.lhs_method(n)
+        if self.optimization_method is not None:
+            lhs = self.optimization_method(lhs)
+
+        self.num_generated += n
         return lhs
 
-    def _random_lhs(self, n: IntNumber = 1) -> np.ndarray:
+    def _random(self, n: IntNumber = 1) -> np.ndarray:
         """Base LHS algorithm."""
-        if not self.scramble:
+        if self.centered:
             samples: np.ndarray | float = 0.5
         else:
             samples = self.rng.uniform(size=(n, self.d))
@@ -1497,7 +1218,7 @@ class LatinHypercube(QMCEngine):
 
         # following is making a scrambled OA into an OA-LHS
         oa_lhs_sample = np.zeros(shape=(n_row, n_col))
-        lhs_engine = LatinHypercube(d=1, scramble=self.scramble, strength=1,
+        lhs_engine = LatinHypercube(d=1, centered=self.centered, strength=1,
                                     seed=self.rng)  # type: QMCEngine
         for j in range(n_col):
             for k in range(p):
@@ -1510,6 +1231,54 @@ class LatinHypercube(QMCEngine):
         oa_lhs_sample /= p
 
         return oa_lhs_sample[:, :self.d]  # type: ignore
+
+    def _random_cd(self, best_sample: np.ndarray) -> np.ndarray:
+        """Optimal LHS on CD.
+
+        Create a base LHS and do random permutations of coordinates to
+        lower the centered discrepancy.
+        Because it starts with a normal LHS, it also works with the
+        `centered` keyword argument.
+
+        Two stopping criterion are used to stop the algorithm: at most,
+        `_n_iters` iterations are performed; or if there is no improvement
+        for `_n_nochange` consecutive iterations.
+        """
+        n = len(best_sample)
+
+        if self.d == 0 or n == 0:
+            return np.empty((n, self.d))
+
+        best_disc = discrepancy(best_sample)
+
+        if n == 1:
+            return best_sample
+
+        bounds = ([0, self.d - 1],
+                  [0, n - 1],
+                  [0, n - 1])
+
+        n_nochange = 0
+        n_iters = 0
+        while n_nochange < self._n_nochange and n_iters < self._n_iters:
+            n_iters += 1
+
+            col = rng_integers(self.rng, *bounds[0])
+            row_1 = rng_integers(self.rng, *bounds[1])
+            row_2 = rng_integers(self.rng, *bounds[2])
+            disc = _perturb_discrepancy(best_sample,
+                                        row_1, row_2, col,
+                                        best_disc)
+            if disc < best_disc:
+                best_sample[row_1, col], best_sample[row_2, col] = (
+                    best_sample[row_2, col], best_sample[row_1, col])
+
+                best_disc = disc
+                n_nochange = 0
+            else:
+                n_nochange += 1
+
+        return best_sample
 
 
 class Sobol(QMCEngine):
@@ -1536,28 +1305,12 @@ class Sobol(QMCEngine):
         It does not correspond to the return type, which is always
         ``np.float64`` to prevent points from repeating themselves.
         Default is None, which for backward compatibility, corresponds to 30.
-
-        .. versionadded:: 1.9.0
-    optimization : {None, "random-cd", "lloyd"}, optional
-        Whether to use an optimization scheme to improve the quality after
-        sampling. Note that this is a post-processing step that does not
-        guarantee that all properties of the sample will be conserved.
-        Default is None.
-
-        * ``random-cd``: random permutations of coordinates to lower the
-          centered discrepancy. The best sample based on the centered
-          discrepancy is constantly updated. Centered discrepancy-based
-          sampling shows better space-filling robustness toward 2D and 3D
-          subprojections compared to using other discrepancy measures.
-        * ``lloyd``: Perturb samples using a modified Lloyd-Max algorithm.
-          The process converges to equally spaced samples.
-
-        .. versionadded:: 1.10.0
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Notes
     -----
@@ -1655,14 +1408,9 @@ class Sobol(QMCEngine):
 
     def __init__(
         self, d: IntNumber, *, scramble: bool = True,
-        bits: IntNumber | None = None, seed: SeedType = None,
-        optimization: Literal["random-cd", "lloyd"] | None = None
+        bits: Optional[IntNumber] = None, seed: SeedType = None
     ) -> None:
-        # Used in `scipy.integrate.qmc_quad`
-        self._init_quad = {'d': d, 'scramble': True, 'bits': bits,
-                           'optimization': optimization}
-
-        super().__init__(d=d, optimization=optimization, seed=seed)
+        super().__init__(d=d, seed=seed)
         if d > self.MAXDIM:
             raise ValueError(
                 f"Maximum supported dimensionality is {self.MAXDIM}."
@@ -1720,9 +1468,7 @@ class Sobol(QMCEngine):
             ltm=ltm, sv=self._sv
         )
 
-    def _random(
-        self, n: IntNumber = 1, *, workers: IntNumber = 1
-    ) -> np.ndarray:
+    def random(self, n: IntNumber = 1) -> np.ndarray:
         """Draw next point(s) in the Sobol' sequence.
 
         Parameters
@@ -1776,6 +1522,7 @@ class Sobol(QMCEngine):
                 sample=sample
             )
 
+        self.num_generated += n
         return sample
 
     def random_base2(self, m: IntNumber) -> np.ndarray:
@@ -1868,32 +1615,18 @@ class PoissonDisk(QMCEngine):
     ncandidates : int
         Number of candidates to sample per iteration. More candidates result
         in a denser sampling as more candidates can be accepted per iteration.
-    optimization : {None, "random-cd", "lloyd"}, optional
-        Whether to use an optimization scheme to improve the quality after
-        sampling. Note that this is a post-processing step that does not
-        guarantee that all properties of the sample will be conserved.
-        Default is None.
-
-        * ``random-cd``: random permutations of coordinates to lower the
-          centered discrepancy. The best sample based on the centered
-          discrepancy is constantly updated. Centered discrepancy-based
-          sampling shows better space-filling robustness toward 2D and 3D
-          subprojections compared to using other discrepancy measures.
-        * ``lloyd``: Perturb samples using a modified Lloyd-Max algorithm.
-          The process converges to equally spaced samples.
-
-        .. versionadded:: 1.10.0
     seed : {None, int, `numpy.random.Generator`}, optional
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Notes
     -----
     Poisson disk sampling is an iterative sampling strategy. Starting from
     a seed sample, `ncandidates` are sampled in the hypersphere
-    surrounding the seed. Candidates below a certain `radius` or outside the
+    surrounding the seed. Candidates bellow a certain `radius` or outside the
     domain are rejected. New samples are added in a pool of sample seed. The
     process stops when the pool is empty or when the number of required
     samples is reached.
@@ -1926,14 +1659,13 @@ class PoissonDisk(QMCEngine):
     --------
     Generate a 2D sample using a `radius` of 0.2.
 
-    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from matplotlib.collections import PatchCollection
     >>> from scipy.stats import qmc
     >>>
     >>> rng = np.random.default_rng()
     >>> radius = 0.2
-    >>> engine = qmc.PoissonDisk(d=2, radius=radius, seed=rng)
+    >>> engine = qmc.PoissonDisk(d=2, radius=0.2, seed=rng)
     >>> sample = engine.random(20)
 
     Visualizing the 2D sample and showing that no points are closer than
@@ -1968,15 +1700,9 @@ class PoissonDisk(QMCEngine):
         radius: DecimalNumber = 0.05,
         hypersphere: Literal["volume", "surface"] = "volume",
         ncandidates: IntNumber = 30,
-        optimization: Literal["random-cd", "lloyd"] | None = None,
         seed: SeedType = None
     ) -> None:
-        # Used in `scipy.integrate.qmc_quad`
-        self._init_quad = {'d': d, 'radius': radius,
-                           'hypersphere': hypersphere,
-                           'ncandidates': ncandidates,
-                           'optimization': optimization}
-        super().__init__(d=d, optimization=optimization, seed=seed)
+        super().__init__(d=d, seed=seed)
 
         hypersphere_sample = {
             "volume": self._hypersphere_volume_sample,
@@ -2022,9 +1748,7 @@ class PoissonDisk(QMCEngine):
         # Initialise empty cells with NaNs
         self.sample_grid.fill(np.nan)
 
-    def _random(
-        self, n: IntNumber = 1, *, workers: IntNumber = 1
-    ) -> np.ndarray:
+    def random(self, n: IntNumber = 1) -> np.ndarray:
         """Draw `n` in the interval ``[0, 1]``.
 
         Note that it can return fewer samples if the space is full.
@@ -2081,7 +1805,7 @@ class PoissonDisk(QMCEngine):
             self.sample_grid[tuple(indices)] = candidate
             curr_sample.append(candidate)
 
-        curr_sample: list[np.ndarray] = []
+        curr_sample: List[np.ndarray] = []
 
         if len(self.sample_pool) == 0:
             # the pool is being initialized with a single random sample
@@ -2191,11 +1915,11 @@ class MultivariateNormalQMC:
     engine : QMCEngine, optional
         Quasi-Monte Carlo engine sampler. If None, `Sobol` is used.
     seed : {None, int, `numpy.random.Generator`}, optional
-        Used only if `engine` is None.
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Examples
     --------
@@ -2209,17 +1933,17 @@ class MultivariateNormalQMC:
     """
 
     def __init__(
-            self, mean: npt.ArrayLike, cov: npt.ArrayLike | None = None, *,
-            cov_root: npt.ArrayLike | None = None,
+            self, mean: npt.ArrayLike, cov: Optional[npt.ArrayLike] = None, *,
+            cov_root: Optional[npt.ArrayLike] = None,
             inv_transform: bool = True,
-            engine: QMCEngine | None = None,
+            engine: Optional[QMCEngine] = None,
             seed: SeedType = None
     ) -> None:
-        mean = np.asarray(np.atleast_1d(mean))
+        mean = np.array(mean, copy=False, ndmin=1)
         d = mean.shape[0]
         if cov is not None:
             # covariance matrix provided
-            cov = np.asarray(np.atleast_2d(cov))
+            cov = np.array(cov, copy=False, ndmin=2)
             # check for square/symmetric cov matrix and mean vector has the
             # same d
             if not mean.shape[0] == cov.shape[0]:
@@ -2316,7 +2040,7 @@ class MultivariateNormalQMC:
         if self._inv_transform:
             # apply inverse transform
             # (values to close to 0/1 result in inf values)
-            return stats.norm.ppf(0.5 + (1 - 1e-10) * (samples - 0.5))  # type: ignore[attr-defined]  # noqa: E501
+            return stats.norm.ppf(0.5 + (1 - 1e-10) * (samples - 0.5))  # type: ignore[attr-defined]
         else:
             # apply Box-Muller transform (note: indexes starting from 1)
             even = np.arange(0, samples.shape[-1], 2)
@@ -2343,44 +2067,26 @@ class MultinomialQMC:
     engine : QMCEngine, optional
         Quasi-Monte Carlo engine sampler. If None, `Sobol` is used.
     seed : {None, int, `numpy.random.Generator`}, optional
-        Used only if `engine` is None.
-        If `seed` is an int or None, a new `numpy.random.Generator` is
-        created using ``np.random.default_rng(seed)``.
-        If `seed` is already a ``Generator`` instance, then the provided
-        instance is used.
+        If `seed` is None the `numpy.random.Generator` singleton is used.
+        If `seed` is an int, a new ``Generator`` instance is used,
+        seeded with `seed`.
+        If `seed` is already a ``Generator`` instance then that instance is
+        used.
 
     Examples
     --------
-    Let's define 3 categories and for a given sample, the sum of the trials
-    of each category is 8. The number of trials per category is determined
-    by the `pvals` associated to each category.
-    Then, we sample this distribution 64 times.
-
-    >>> import matplotlib.pyplot as plt
     >>> from scipy.stats import qmc
-    >>> dist = qmc.MultinomialQMC(
-    ...     pvals=[0.2, 0.4, 0.4], n_trials=10, engine=qmc.Halton(d=1)
-    ... )
-    >>> sample = dist.random(64)
-
-    We can plot the sample and verify that the median of number of trials
-    for each category is following the `pvals`. That would be
-    ``pvals * n_trials = [2, 4, 4]``.
-
-    >>> fig, ax = plt.subplots()
-    >>> ax.yaxis.get_major_locator().set_params(integer=True)
-    >>> _ = ax.boxplot(sample)
-    >>> ax.set(xlabel="Categories", ylabel="Trials")
-    >>> plt.show()
+    >>> dist = qmc.MultinomialQMC(pvals=[0.2, 0.4, 0.4], n_trials=10)
+    >>> sample = dist.random(10)
 
     """
 
     def __init__(
         self, pvals: npt.ArrayLike, n_trials: IntNumber,
-        *, engine: QMCEngine | None = None,
+        *, engine: Optional[QMCEngine] = None,
         seed: SeedType = None
     ) -> None:
-        self.pvals = np.atleast_1d(np.asarray(pvals))
+        self.pvals = np.array(pvals, copy=False, ndmin=1)
         if np.min(pvals) < 0:
             raise ValueError('Elements of pvals must be non-negative.')
         if not np.isclose(np.sum(pvals), 1):
@@ -2417,103 +2123,20 @@ class MultinomialQMC:
             base_draws = self.engine.random(self.n_trials).ravel()
             p_cumulative = np.empty_like(self.pvals, dtype=float)
             _fill_p_cumulative(np.array(self.pvals, dtype=float), p_cumulative)
-            sample_ = np.zeros_like(self.pvals, dtype=np.intp)
+            sample_ = np.zeros_like(self.pvals, dtype=int)
             _categorize(base_draws, p_cumulative, sample_)
             sample[i] = sample_
         return sample
-
-
-def _select_optimizer(
-    optimization: Literal["random-cd", "lloyd"] | None, config: dict
-) -> Callable | None:
-    """A factory for optimization methods."""
-    optimization_method: dict[str, Callable] = {
-        "random-cd": _random_cd,
-        "lloyd": _lloyd_centroidal_voronoi_tessellation
-    }
-
-    optimizer: partial | None
-    if optimization is not None:
-        try:
-            optimization = optimization.lower()  # type: ignore[assignment]
-            optimizer_ = optimization_method[optimization]
-        except KeyError as exc:
-            message = (f"{optimization!r} is not a valid optimization"
-                       f" method. It must be one of"
-                       f" {set(optimization_method)!r}")
-            raise ValueError(message) from exc
-
-        # config
-        optimizer = partial(optimizer_, **config)
-    else:
-        optimizer = None
-
-    return optimizer
-
-
-def _random_cd(
-    best_sample: np.ndarray, n_iters: int, n_nochange: int, rng: GeneratorType,
-    **kwargs: dict
-) -> np.ndarray:
-    """Optimal LHS on CD.
-
-    Create a base LHS and do random permutations of coordinates to
-    lower the centered discrepancy.
-    Because it starts with a normal LHS, it also works with the
-    `scramble` keyword argument.
-
-    Two stopping criterion are used to stop the algorithm: at most,
-    `n_iters` iterations are performed; or if there is no improvement
-    for `n_nochange` consecutive iterations.
-    """
-    del kwargs  # only use keywords which are defined, needed by factory
-
-    n, d = best_sample.shape
-
-    if d == 0 or n == 0:
-        return np.empty((n, d))
-
-    if d == 1 or n == 1:
-        # discrepancy measures are invariant under permuting factors and runs
-        return best_sample
-
-    best_disc = discrepancy(best_sample)
-
-    bounds = ([0, d - 1],
-              [0, n - 1],
-              [0, n - 1])
-
-    n_nochange_ = 0
-    n_iters_ = 0
-    while n_nochange_ < n_nochange and n_iters_ < n_iters:
-        n_iters_ += 1
-
-        col = rng_integers(rng, *bounds[0], endpoint=True)  # type: ignore[misc]
-        row_1 = rng_integers(rng, *bounds[1], endpoint=True)  # type: ignore[misc]
-        row_2 = rng_integers(rng, *bounds[2], endpoint=True)  # type: ignore[misc]
-        disc = _perturb_discrepancy(best_sample,
-                                    row_1, row_2, col,
-                                    best_disc)
-        if disc < best_disc:
-            best_sample[row_1, col], best_sample[row_2, col] = (
-                best_sample[row_2, col], best_sample[row_1, col])
-
-            best_disc = disc
-            n_nochange_ = 0
-        else:
-            n_nochange_ += 1
-
-    return best_sample
 
 
 def _l1_norm(sample: np.ndarray) -> float:
     return distance.pdist(sample, 'cityblock').min()
 
 
-def _lloyd_iteration(
-    sample: np.ndarray,
-    decay: float,
-    qhull_options: str
+def _lloyd_centroidal_voronoi_tessellation(
+        sample: np.ndarray,
+        decay: float,
+        qhull_options: str,
 ) -> np.ndarray:
     """Lloyd-Max algorithm iteration.
 
@@ -2574,13 +2197,12 @@ def _lloyd_iteration(
     return sample
 
 
-def _lloyd_centroidal_voronoi_tessellation(
-    sample: npt.ArrayLike,
-    *,
-    tol: DecimalNumber = 1e-5,
-    maxiter: IntNumber = 10,
-    qhull_options: str | None = None,
-    **kwargs: dict
+def lloyd_centroidal_voronoi_tessellation(
+        sample: npt.ArrayLike,
+        *,
+        tol: DecimalNumber = 1e-5,
+        maxiter: IntNumber = 10,
+        qhull_options: Optional[str] = None,
 ) -> np.ndarray:
     """Approximate Centroidal Voronoi Tessellation.
 
@@ -2653,9 +2275,7 @@ def _lloyd_centroidal_voronoi_tessellation(
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.spatial import distance
-    >>> from scipy.stats._qmc import _lloyd_centroidal_voronoi_tessellation
     >>> rng = np.random.default_rng()
     >>> sample = rng.random((128, 2))
 
@@ -2676,13 +2296,11 @@ def _lloyd_centroidal_voronoi_tessellation(
     Now process the sample using Lloyd's algorithm and check the improvement
     on the L1. The value should increase.
 
-    >>> sample = _lloyd_centroidal_voronoi_tessellation(sample)
+    >>> sample = lloyd_centroidal_voronoi_tessellation(sample)
     >>> l1_norm(sample)
     0.0278...  # random
 
     """
-    del kwargs  # only use keywords which are defined, needed by factory
-
     sample = np.asarray(sample).copy()
 
     if not sample.ndim == 2:
@@ -2709,7 +2327,7 @@ def _lloyd_centroidal_voronoi_tessellation(
 
     l1_old = _l1_norm(sample=sample)
     for i in range(maxiter):
-        sample = _lloyd_iteration(
+        sample = _lloyd_centroidal_voronoi_tessellation(
                 sample=sample, decay=decay[i],
                 qhull_options=qhull_options,
         )
@@ -2756,7 +2374,7 @@ def _validate_workers(workers: IntNumber = 1) -> IntNumber:
 
 def _validate_bounds(
     l_bounds: npt.ArrayLike, u_bounds: npt.ArrayLike, d: int
-) -> tuple[np.ndarray, ...]:
+) -> Tuple[np.ndarray, ...]:
     """Bounds input validation.
 
     Parameters

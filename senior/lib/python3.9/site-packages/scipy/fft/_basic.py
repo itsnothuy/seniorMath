@@ -45,7 +45,7 @@ def fft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     norm : {"backward", "ortho", "forward"}, optional
         Normalization mode. Default is "backward", meaning no normalization on
         the forward transforms and scaling by ``1/n`` on the `ifft`.
-        "forward" instead applies the ``1/n`` factor on the forward transform.
+        "forward" instead applies the ``1/n`` factor on the forward tranform.
         For ``norm="ortho"``, both directions are scaled by ``1/sqrt(n)``.
 
         .. versionadded:: 1.6.0
@@ -141,7 +141,6 @@ def fft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> scipy.fft.fft(np.exp(2j * np.pi * np.arange(8) / 8))
     array([-2.33486982e-16+1.14423775e-17j,  8.00000000e+00-1.25557246e-15j,
             2.33486982e-16+2.33486982e-16j,  0.00000000e+00+1.22464680e-16j,
@@ -157,8 +156,7 @@ def fft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     >>> sp = fftshift(fft(np.sin(t)))
     >>> freq = fftshift(fftfreq(t.shape[-1]))
     >>> plt.plot(freq, sp.real, freq, sp.imag)
-    [<matplotlib.lines.Line2D object at 0x...>,
-     <matplotlib.lines.Line2D object at 0x...>]
+    [<matplotlib.lines.Line2D object at 0x...>, <matplotlib.lines.Line2D object at 0x...>]
     >>> plt.show()
 
     """
@@ -249,7 +247,6 @@ def ifft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> scipy.fft.ifft([0, 4, 0, 0])
     array([ 1.+0.j,  0.+1.j, -1.+0.j,  0.-1.j]) # may vary
 
@@ -535,7 +532,6 @@ def hfft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> from scipy.fft import fft, hfft
-    >>> import numpy as np
     >>> a = 2 * np.pi * np.arange(10) / 10
     >>> signal = np.cos(a) + 3j * np.sin(3 * a)
     >>> fft(signal).round(10)
@@ -606,7 +602,6 @@ def ihfft(x, n=None, axis=-1, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> from scipy.fft import ifft, ihfft
-    >>> import numpy as np
     >>> spectrum = np.array([ 15, -4, 0, -1, 0, -4])
     >>> ifft(spectrum)
     array([1.+0.j,  2.+0.j,  3.+0.j,  4.+0.j,  3.+0.j,  2.+0.j]) # may vary
@@ -668,7 +663,7 @@ def fftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -689,7 +684,6 @@ def fftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.mgrid[:3, :3, :3][0]
     >>> scipy.fft.fftn(x, axes=(1, 2))
     array([[[ 0.+0.j,   0.+0.j,   0.+0.j], # may vary
@@ -781,7 +775,7 @@ def ifftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -801,7 +795,6 @@ def ifftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.eye(4)
     >>> scipy.fft.ifftn(scipy.fft.fftn(x, axes=(0,)), axes=(1,))
     array([[1.+0.j,  0.+0.j,  0.+0.j,  0.+0.j], # may vary
@@ -878,7 +871,7 @@ def fft2(x, s=None, axes=(-2, -1), norm=None, overwrite_x=False, workers=None, *
         If `s` and `axes` have different length, or `axes` not given and
         ``len(s) != 2``.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -906,7 +899,6 @@ def fft2(x, s=None, axes=(-2, -1), norm=None, overwrite_x=False, workers=None, *
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.mgrid[:5, :5][0]
     >>> scipy.fft.fft2(x)
     array([[ 50.  +0.j        ,   0.  +0.j        ,   0.  +0.j        , # may vary
@@ -984,7 +976,7 @@ def ifft2(x, s=None, axes=(-2, -1), norm=None, overwrite_x=False, workers=None, 
         If `s` and `axes` have different length, or `axes` not given and
         ``len(s) != 2``.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -1008,7 +1000,6 @@ def ifft2(x, s=None, axes=(-2, -1), norm=None, overwrite_x=False, workers=None, 
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = 4 * np.eye(4)
     >>> scipy.fft.ifft2(x)
     array([[1.+0.j,  0.+0.j,  0.+0.j,  0.+0.j], # may vary
@@ -1078,7 +1069,7 @@ def rfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -1102,7 +1093,6 @@ def rfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.ones((2, 2, 2))
     >>> scipy.fft.rfftn(x)
     array([[[8.+0.j,  0.+0.j], # may vary
@@ -1237,7 +1227,7 @@ def irfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -1262,7 +1252,6 @@ def irfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.zeros((3, 2, 2))
     >>> x[0, 0, 0] = 3 * 2 * 2
     >>> scipy.fft.irfftn(x)
@@ -1391,7 +1380,7 @@ def hfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -1426,7 +1415,6 @@ def hfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.ones((3, 2, 2))
     >>> scipy.fft.hfftn(x)
     array([[[12.,  0.],
@@ -1545,7 +1533,7 @@ def ihfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     ValueError
         If `s` and `axes` have different length.
     IndexError
-        If an element of `axes` is larger than the number of axes of `x`.
+        If an element of `axes` is larger than than the number of axes of `x`.
 
     See Also
     --------
@@ -1565,7 +1553,6 @@ def ihfftn(x, s=None, axes=None, norm=None, overwrite_x=False, workers=None, *,
     Examples
     --------
     >>> import scipy.fft
-    >>> import numpy as np
     >>> x = np.ones((2, 2, 2))
     >>> scipy.fft.ihfftn(x)
     array([[[1.+0.j,  0.+0.j], # may vary

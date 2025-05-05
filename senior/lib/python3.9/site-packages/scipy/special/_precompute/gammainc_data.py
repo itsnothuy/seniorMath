@@ -114,10 +114,10 @@ def main():
             dataset.append((a0, x0, func(a0, x0)))
         dataset = np.array(dataset)
         filename = os.path.join(pwd, '..', 'tests', 'data', 'local',
-                                f'{func.__name__}.txt')
+                                '{}.txt'.format(func.__name__))
         np.savetxt(filename, dataset)
 
-    print(f"{(time() - t0)/60} minutes elapsed")
+    print("{} minutes elapsed".format((time() - t0)/60))
 
 
 if __name__ == "__main__":

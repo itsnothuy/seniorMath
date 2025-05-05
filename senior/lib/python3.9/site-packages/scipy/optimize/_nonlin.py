@@ -1,26 +1,21 @@
 # Copyright (C) 2009, Pauli Virtanen <pav@iki.fi>
 # Distributed under the same license as SciPy.
 
-import inspect
 import sys
-import warnings
-
 import numpy as np
-from numpy import asarray, dot, vdot
-
 from scipy.linalg import norm, solve, inv, qr, svd, LinAlgError
+from numpy import asarray, dot, vdot
 import scipy.sparse.linalg
 import scipy.sparse
 from scipy.linalg import get_blas_funcs
-from scipy._lib._util import copy_if_needed
+import inspect
 from scipy._lib._util import getfullargspec_no_self as _getfullargspec
 from ._linesearch import scalar_search_wolfe1, scalar_search_armijo
 
 
 __all__ = [
     'broyden1', 'broyden2', 'anderson', 'linearmixing',
-    'diagbroyden', 'excitingmixing', 'newton_krylov',
-    'BroydenFirst', 'KrylovJacobian', 'InverseJacobian', 'NoConvergence']
+    'diagbroyden', 'excitingmixing', 'newton_krylov']
 
 #------------------------------------------------------------------------------
 # Utility functions
@@ -28,8 +23,6 @@ __all__ = [
 
 
 class NoConvergence(Exception):
-    """Exception raised when nonlinear solver fails to converge within the specified
-    `maxiter`."""
     pass
 
 
@@ -41,7 +34,7 @@ def _as_inexact(x):
     """Return `x` as an array, of either floats or complex floats"""
     x = asarray(x)
     if not np.issubdtype(x.dtype, np.inexact):
-        return asarray(x, dtype=np.float64)
+        return asarray(x, dtype=np.float_)
     return x
 
 
@@ -170,8 +163,7 @@ def nonlin_solve(F, x0, jacobian='krylov', iter=None, verbose=False,
                                      iter=iter, norm=tol_norm)
 
     x0 = _as_inexact(x0)
-    def func(z):
-        return _as_inexact(F(_array_like(z, x0))).flatten()
+    func = lambda z: _as_inexact(F(_array_like(z, x0))).flatten()
     x = x0.flatten()
 
     dx = np.full_like(x, np.inf)
@@ -331,7 +323,7 @@ class TerminationCondition:
                  iter=None, norm=maxnorm):
 
         if f_tol is None:
-            f_tol = np.finfo(np.float64).eps ** (1./3)
+            f_tol = np.finfo(np.float_).eps ** (1./3)
         if f_rtol is None:
             f_rtol = np.inf
         if x_tol is None:
@@ -425,12 +417,8 @@ class Jacobian:
             if value is not None:
                 setattr(self, name, kw[name])
 
-
-        if hasattr(self, "todense"):
-            def __array__(self, dtype=None, copy=None):
-                if dtype is not None:
-                    raise ValueError(f"`dtype` must be None, was {dtype}")
-                return self.todense()
+        if hasattr(self, 'todense'):
+            self.__array__ = lambda: self.todense()
 
     def aspreconditioner(self):
         return InverseJacobian(self)
@@ -487,16 +475,16 @@ def asjacobian(J):
 
         return Jacobian(matvec=lambda v: dot(J, v),
                         rmatvec=lambda v: dot(J.conj().T, v),
-                        solve=lambda v, tol=0: solve(J, v),
-                        rsolve=lambda v, tol=0: solve(J.conj().T, v),
+                        solve=lambda v: solve(J, v),
+                        rsolve=lambda v: solve(J.conj().T, v),
                         dtype=J.dtype, shape=J.shape)
-    elif scipy.sparse.issparse(J):
+    elif scipy.sparse.isspmatrix(J):
         if J.shape[0] != J.shape[1]:
             raise ValueError('matrix must be square')
-        return Jacobian(matvec=lambda v: J @ v,
-                        rmatvec=lambda v: J.conj().T @ v,
-                        solve=lambda v, tol=0: spsolve(J, v),
-                        rsolve=lambda v, tol=0: spsolve(J.conj().T, v),
+        return Jacobian(matvec=lambda v: J*v,
+                        rmatvec=lambda v: J.conj().T * v,
+                        solve=lambda v: spsolve(J, v),
+                        rsolve=lambda v: spsolve(J.conj().T, v),
                         dtype=J.dtype, shape=J.shape)
     elif hasattr(J, 'shape') and hasattr(J, 'dtype') and hasattr(J, 'solve'):
         return Jacobian(matvec=getattr(J, 'matvec'),
@@ -517,7 +505,7 @@ def asjacobian(J):
                 m = J(self.x)
                 if isinstance(m, np.ndarray):
                     return solve(m, v)
-                elif scipy.sparse.issparse(m):
+                elif scipy.sparse.isspmatrix(m):
                     return spsolve(m, v)
                 else:
                     raise ValueError("Unknown matrix type")
@@ -526,8 +514,8 @@ def asjacobian(J):
                 m = J(self.x)
                 if isinstance(m, np.ndarray):
                     return dot(m, v)
-                elif scipy.sparse.issparse(m):
-                    return m @ v
+                elif scipy.sparse.isspmatrix(m):
+                    return m*v
                 else:
                     raise ValueError("Unknown matrix type")
 
@@ -535,7 +523,7 @@ def asjacobian(J):
                 m = J(self.x)
                 if isinstance(m, np.ndarray):
                     return solve(m.conj().T, v)
-                elif scipy.sparse.issparse(m):
+                elif scipy.sparse.isspmatrix(m):
                     return spsolve(m.conj().T, v)
                 else:
                     raise ValueError("Unknown matrix type")
@@ -544,8 +532,8 @@ def asjacobian(J):
                 m = J(self.x)
                 if isinstance(m, np.ndarray):
                     return dot(m.conj().T, v)
-                elif scipy.sparse.issparse(m):
-                    return m.conj().T @ v
+                elif scipy.sparse.isspmatrix(m):
+                    return m.conj().T * v
                 else:
                     raise ValueError("Unknown matrix type")
         return Jac()
@@ -683,15 +671,7 @@ class LowRankMatrix:
         if len(self.cs) > c.size:
             self.collapse()
 
-    def __array__(self, dtype=None, copy=None):
-        if dtype is not None:
-            warnings.warn("LowRankMatrix is scipy-internal code, `dtype` "
-                          f"should only be None but was {dtype} (not handled)",
-                          stacklevel=3)
-        if copy is not None:
-            warnings.warn("LowRankMatrix is scipy-internal code, `copy` "
-                          f"should only be None but was {copy} (not handled)",
-                          stacklevel=3)
+    def __array__(self):
         if self.collapsed is not None:
             return self.collapsed
 
@@ -702,7 +682,7 @@ class LowRankMatrix:
 
     def collapse(self):
         """Collapse the low-rank matrix to a full-rank one."""
-        self.collapsed = np.array(self, copy=copy_if_needed)
+        self.collapsed = np.array(self)
         self.cs = None
         self.ds = None
         self.alpha = None
@@ -834,7 +814,7 @@ class BroydenFirst(GenericBroyden):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='broyden1'`` in particular.
+           functions. See ``method=='broyden1'`` in particular.
 
     Notes
     -----
@@ -948,7 +928,7 @@ class BroydenSecond(BroydenFirst):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='broyden2'`` in particular.
+           functions. See ``method=='broyden2'`` in particular.
 
     Notes
     -----
@@ -1020,7 +1000,7 @@ class Anderson(GenericBroyden):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='anderson'`` in particular.
+           functions. See ``method=='anderson'`` in particular.
 
     References
     ----------
@@ -1175,7 +1155,7 @@ class DiagBroyden(GenericBroyden):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='diagbroyden'`` in particular.
+           functions. See ``method=='diagbroyden'`` in particular.
 
     Examples
     --------
@@ -1240,7 +1220,7 @@ class LinearMixing(GenericBroyden):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='linearmixing'`` in particular.
+           functions. See ``method=='linearmixing'`` in particular.
 
     """
 
@@ -1281,7 +1261,7 @@ class ExcitingMixing(GenericBroyden):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='excitingmixing'`` in particular.
+           functions. See ``method=='excitingmixing'`` in particular.
 
     Parameters
     ----------
@@ -1358,8 +1338,8 @@ class KrylovJacobian(Jacobian):
         Note that you can use also inverse Jacobians as (adaptive)
         preconditioners. For example,
 
-        >>> from scipy.optimize import BroydenFirst, KrylovJacobian
-        >>> from scipy.optimize import InverseJacobian
+        >>> from scipy.optimize.nonlin import BroydenFirst, KrylovJacobian
+        >>> from scipy.optimize.nonlin import InverseJacobian
         >>> jac = BroydenFirst()
         >>> kjac = KrylovJacobian(inner_M=InverseJacobian(jac))
 
@@ -1379,7 +1359,7 @@ class KrylovJacobian(Jacobian):
     See Also
     --------
     root : Interface to root finding algorithms for multivariate
-           functions. See ``method='krylov'`` in particular.
+           functions. See ``method=='krylov'`` in particular.
     scipy.sparse.linalg.gmres
     scipy.sparse.linalg.lgmres
 
@@ -1451,7 +1431,7 @@ class KrylovJacobian(Jacobian):
 
         if self.method is scipy.sparse.linalg.gmres:
             # Replace GMRES's outer iteration with Newton steps
-            self.method_kw['restart'] = inner_maxiter
+            self.method_kw['restrt'] = inner_maxiter
             self.method_kw['maxiter'] = 1
             self.method_kw.setdefault('atol', 0)
         elif self.method in (scipy.sparse.linalg.gcrotmk,
@@ -1495,10 +1475,10 @@ class KrylovJacobian(Jacobian):
         return r
 
     def solve(self, rhs, tol=0):
-        if 'rtol' in self.method_kw:
+        if 'tol' in self.method_kw:
             sol, info = self.method(self.op, rhs, **self.method_kw)
         else:
-            sol, info = self.method(self.op, rhs, rtol=tol, **self.method_kw)
+            sol, info = self.method(self.op, rhs, tol=tol, **self.method_kw)
         return sol
 
     def update(self, x, f):
@@ -1544,10 +1524,10 @@ def _nonlin_wrapper(name, jac):
     signature = _getfullargspec(jac.__init__)
     args, varargs, varkw, defaults, kwonlyargs, kwdefaults, _ = signature
     kwargs = list(zip(args[-len(defaults):], defaults))
-    kw_str = ", ".join([f"{k}={v!r}" for k, v in kwargs])
+    kw_str = ", ".join(["%s=%r" % (k, v) for k, v in kwargs])
     if kw_str:
         kw_str = ", " + kw_str
-    kwkw_str = ", ".join([f"{k}={k}" for k, v in kwargs])
+    kwkw_str = ", ".join(["%s=%s" % (k, k) for k, v in kwargs])
     if kwkw_str:
         kwkw_str = kwkw_str + ", "
     if kwonlyargs:

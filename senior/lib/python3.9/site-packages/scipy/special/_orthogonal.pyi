@@ -1,20 +1,30 @@
-from __future__ import annotations
 from typing import (
     Any,
     Callable,
-    Literal,
+    List,
     Optional,
     overload,
+    Tuple,
+    Union,
 )
+from typing_extensions import Literal
 
 import numpy
 
-_IntegerType = int | numpy.integer
-_FloatingType = float | numpy.floating
-_PointsAndWeights = tuple[numpy.ndarray, numpy.ndarray]
-_PointsAndWeightsAndMu = tuple[numpy.ndarray, numpy.ndarray, float]
+_IntegerType = Union[int, numpy.integer]
+_FloatingType = Union[float, numpy.floating]
+_PointsAndWeights = Tuple[numpy.ndarray, numpy.ndarray]
+_PointsAndWeightsAndMu = Tuple[numpy.ndarray, numpy.ndarray, float]
 
-_ArrayLike0D = bool | int | float | complex | str | bytes | numpy.generic
+_ArrayLike0D = Union[
+    bool,
+    int,
+    float,
+    complex,
+    str,
+    bytes,
+    numpy.generic,
+]
 
 __all__ = [
     'legendre',
@@ -274,16 +284,16 @@ class orthopoly1d(numpy.poly1d):
     def __init__(
             self,
             roots: numpy.typing.ArrayLike,
-            weights: numpy.typing.ArrayLike | None,
+            weights: Optional[numpy.typing.ArrayLike],
             hn: float = ...,
             kn: float = ...,
-            wfunc = Optional[Callable[[float], float]],  # noqa: UP007
-            limits = tuple[float, float] | None,
+            wfunc = Optional[Callable[[float], float]],
+            limits = Optional[Tuple[float, float]],
             monic: bool = ...,
             eval_func: numpy.ufunc = ...,
     ) -> None: ...
     @property
-    def limits(self) -> tuple[float, float]: ...
+    def limits(self) -> Tuple[float, float]: ...
     def weight_func(self, x: float) -> float: ...
     @overload
     def __call__(self, x: _ArrayLike0D) -> Any: ...

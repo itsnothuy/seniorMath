@@ -14,14 +14,13 @@ from pytest import raises as assert_raises
 import scipy.linalg
 from scipy.linalg import norm, inv
 from scipy.sparse import (spdiags, SparseEfficiencyWarning, csc_matrix,
-        csr_matrix, identity, issparse, dok_matrix, lil_matrix, bsr_matrix)
+        csr_matrix, identity, isspmatrix, dok_matrix, lil_matrix, bsr_matrix)
 from scipy.sparse.linalg import SuperLU
 from scipy.sparse.linalg._dsolve import (spsolve, use_solver, splu, spilu,
         MatrixRankWarning, _superlu, spsolve_triangular, factorized)
 import scipy.sparse
 
 from scipy._lib._testutils import check_free_memory
-from scipy._lib._util import ComplexWarning
 
 
 sup_sparse_efficiency = suppress_warnings()
@@ -36,7 +35,7 @@ except ImportError:
     has_umfpack = False
 
 def toarray(a):
-    if issparse(a):
+    if isspmatrix(a):
         return a.toarray()
     else:
         return a
@@ -155,7 +154,7 @@ class TestFactorized:
         solve = factorized(self.A)
         b = random.rand(4)
         for t in [np.complex64, np.complex128]:
-            assert_warns(ComplexWarning, solve, b.astype(t))
+            assert_warns(np.ComplexWarning, solve, b.astype(t))
 
     @pytest.mark.skipif(not has_umfpack, reason="umfpack not available")
     def test_assume_sorted_indices_flag(self):
@@ -221,11 +220,8 @@ class TestLinsolve:
         except RuntimeError:
             pass
 
-    @pytest.mark.parametrize('format', ['csc', 'csr'])
-    @pytest.mark.parametrize('idx_dtype', [np.int32, np.int64])
-    def test_twodiags(self, format: str, idx_dtype: np.dtype):
-        A = spdiags([[1, 2, 3, 4, 5], [6, 5, 8, 9, 10]], [0, 1], 5, 5,
-                    format=format)
+    def test_twodiags(self):
+        A = spdiags([[1, 2, 3, 4, 5], [6, 5, 8, 9, 10]], [0, 1], 5, 5)
         b = array([1, 2, 3, 4, 5])
 
         # condition number of A
@@ -234,12 +230,13 @@ class TestLinsolve:
         for t in ['f','d','F','D']:
             eps = finfo(t).eps  # floating point epsilon
             b = b.astype(t)
-            Asp = A.astype(t)
-            Asp.indices = Asp.indices.astype(idx_dtype, copy=False)
-            Asp.indptr = Asp.indptr.astype(idx_dtype, copy=False)
 
-            x = spsolve(Asp, b)
-            assert_(norm(b - Asp@x) < 10 * cond_A * eps)
+            for format in ['csc','csr']:
+                Asp = A.astype(t).asformat(format)
+
+                x = spsolve(Asp,b)
+
+                assert_(norm(b - Asp@x) < 10 * cond_A * eps)
 
     def test_bvector_smoketest(self):
         Adense = array([[0., 1., 1.],
@@ -327,15 +324,13 @@ class TestLinsolve:
                     # interprets also these as "vectors"
                     x = x.ravel()
 
-                assert_array_almost_equal(toarray(x1), x,
-                                          err_msg=repr((b, spmattype, 1)))
-                assert_array_almost_equal(toarray(x2), x,
-                                          err_msg=repr((b, spmattype, 2)))
+                assert_array_almost_equal(toarray(x1), x, err_msg=repr((b, spmattype, 1)))
+                assert_array_almost_equal(toarray(x2), x, err_msg=repr((b, spmattype, 2)))
 
                 # dense vs. sparse output  ("vectors" are always dense)
-                if issparse(b) and x.ndim > 1:
-                    assert_(issparse(x1), repr((b, spmattype, 1)))
-                    assert_(issparse(x2), repr((b, spmattype, 2)))
+                if isspmatrix(b) and x.ndim > 1:
+                    assert_(isspmatrix(x1), repr((b, spmattype, 1)))
+                    assert_(isspmatrix(x2), repr((b, spmattype, 2)))
                 else:
                     assert_(isinstance(x1, np.ndarray), repr((b, spmattype, 1)))
                     assert_(isinstance(x2, np.ndarray), repr((b, spmattype, 2)))
@@ -386,7 +381,7 @@ class TestLinsolve:
             badops = [not_c_contig, not_1dim, bad_type, too_short]
 
             for badop in badops:
-                msg = f"{spmatrix!r} {badop!r}"
+                msg = "%r %r" % (spmatrix, badop)
                 # Not C-contiguous
                 assert_raises((ValueError, TypeError), _superlu.gssv,
                               N, A.nnz, badop(A.data), A.indices, A.indptr,
@@ -447,25 +442,23 @@ class TestSplu:
         n = 40
         d = arange(n) + 1
         self.n = n
-        self.A = spdiags((d, 2*d, d[::-1]), (-3, 0, 5), n, n, format='csc')
+        self.A = spdiags((d, 2*d, d[::-1]), (-3, 0, 5), n, n)
         random.seed(1234)
 
-    def _smoketest(self, spxlu, check, dtype, idx_dtype):
+    def _smoketest(self, spxlu, check, dtype):
         if np.issubdtype(dtype, np.complexfloating):
             A = self.A + 1j*self.A.T
         else:
             A = self.A
 
         A = A.astype(dtype)
-        A.indices = A.indices.astype(idx_dtype, copy=False)
-        A.indptr = A.indptr.astype(idx_dtype, copy=False)
         lu = spxlu(A)
 
         rng = random.RandomState(1234)
 
         # Input shapes
         for k in [None, 1, 2, self.n, self.n+2]:
-            msg = f"k={k!r}"
+            msg = "k=%r" % (k,)
 
             if k is None:
                 b = rng.rand(self.n)
@@ -496,9 +489,10 @@ class TestSplu:
             r = A @ x
             assert_(abs(r - b).max() < 1e3*eps, msg)
 
-        for dtype in [np.float32, np.float64, np.complex64, np.complex128]:
-            for idx_dtype in [np.int32, np.int64]:
-                self._smoketest(splu, check, dtype, idx_dtype)
+        self._smoketest(splu, check, np.float32)
+        self._smoketest(splu, check, np.float64)
+        self._smoketest(splu, check, np.complex64)
+        self._smoketest(splu, check, np.complex128)
 
     @sup_sparse_efficiency
     def test_spilu_smoketest(self):
@@ -514,9 +508,10 @@ class TestSplu:
             if b.dtype in (np.float64, np.complex128):
                 errors.append(err)
 
-        for dtype in [np.float32, np.float64, np.complex64, np.complex128]:
-            for idx_dtype in [np.int32, np.int64]:
-                self._smoketest(spilu, check, dtype, idx_dtype)
+        self._smoketest(spilu, check, np.float32)
+        self._smoketest(spilu, check, np.float64)
+        self._smoketest(spilu, check, np.complex64)
+        self._smoketest(spilu, check, np.complex128)
 
         assert_(max(errors) > 1e-5)
 
@@ -676,7 +671,7 @@ class TestSplu:
             n = A.shape[0]
             lu = splu(A)
 
-            # Check that the decomposition is as advertised
+            # Check that the decomposition is as advertized
 
             Pc = np.zeros((n, n))
             Pc[np.arange(n), lu.perm_c] = 1
@@ -751,8 +746,7 @@ class TestSpsolveTriangular:
         A = csr_matrix((n, n))
         b = np.arange(n)
         for lower in (True, False):
-            assert_raises(scipy.linalg.LinAlgError,
-                          spsolve_triangular, A, b, lower=lower)
+            assert_raises(scipy.linalg.LinAlgError, spsolve_triangular, A, b, lower=lower)
 
     @sup_sparse_efficiency
     def test_bad_shape(self):
@@ -774,7 +768,6 @@ class TestSpsolveTriangular:
             assert_array_almost_equal(A.dot(x), b)
 
     @pytest.mark.slow
-    @pytest.mark.timeout(120)  # prerelease_deps_coverage_64bit_blas job
     @sup_sparse_efficiency
     def test_random(self):
         def random_triangle_matrix(n, lower=True):

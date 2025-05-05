@@ -1,9 +1,9 @@
 import warnings
 import numpy as np
+import scipy.stats._stats_py
 from . import distributions
 from .._lib._bunch import _make_tuple_bunch
-from ._stats_pythran import siegelslopes as siegelslopes_pythran
-from . import _mstats_basic
+
 
 __all__ = ['_find_repeats', 'linregress', 'theilslopes', 'siegelslopes']
 
@@ -94,7 +94,6 @@ def linregress(x, y=None, alternative='two-sided'):
 
     Examples
     --------
-    >>> import numpy as np
     >>> import matplotlib.pyplot as plt
     >>> from scipy import stats
     >>> rng = np.random.default_rng()
@@ -194,7 +193,7 @@ def linregress(x, y=None, alternative='two-sided'):
         # n-2 degrees of freedom because 2 has been used up
         # to estimate the mean and standard deviation
         t = r * np.sqrt(df / ((1.0 - r + TINY)*(1.0 + r + TINY)))
-        t, prob = _mstats_basic._ttest_finish(df, t, alternative)
+        t, prob = scipy.stats._stats_py._ttest_finish(df, t, alternative)
 
         slope_stderr = np.sqrt((1 - r**2) * ssym / ssxm / df)
 
@@ -286,7 +285,6 @@ def theilslopes(y, x=None, alpha=0.95, method='separate'):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
 
@@ -318,16 +316,17 @@ def theilslopes(y, x=None, alpha=0.95, method='separate'):
 
     """
     if method not in ['joint', 'separate']:
-        raise ValueError("method must be either 'joint' or 'separate'."
-                         f"'{method}' is invalid.")
+        raise ValueError(("method must be either 'joint' or 'separate'."
+                          "'{}' is invalid.".format(method)))
     # We copy both x and y so we can use _find_repeats.
-    y = np.array(y, dtype=float, copy=True).ravel()
+    y = np.array(y).flatten()
     if x is None:
         x = np.arange(len(y), dtype=float)
     else:
-        x = np.array(x, dtype=float, copy=True).ravel()
+        x = np.array(x, dtype=float).flatten()
         if len(x) != len(y):
-            raise ValueError(f"Incompatible lengths ! ({len(y)}<>{len(x)})")
+            raise ValueError("Incompatible lengths ! (%s<>%s)" %
+                             (len(y), len(x)))
 
     # Compute sorted slopes only when deltax > 0
     deltax = x[:, np.newaxis] - x
@@ -458,7 +457,6 @@ def siegelslopes(y, x=None, method="hierarchical"):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy import stats
     >>> import matplotlib.pyplot as plt
 
@@ -492,8 +490,27 @@ def siegelslopes(y, x=None, method="hierarchical"):
     else:
         x = np.asarray(x, dtype=float).ravel()
         if len(x) != len(y):
-            raise ValueError(f"Incompatible lengths ! ({len(y)}<>{len(x)})")
-    dtype = np.result_type(x, y, np.float32)  # use at least float32
-    y, x = y.astype(dtype), x.astype(dtype)
-    medslope, medinter = siegelslopes_pythran(y, x, method)
+            raise ValueError("Incompatible lengths ! (%s<>%s)" %
+                             (len(y), len(x)))
+
+    deltax = x[:, np.newaxis] - x
+    deltay = y[:, np.newaxis] - y
+    slopes, intercepts = [], []
+
+    for j in range(len(x)):
+        id_nonzero = deltax[j, :] != 0
+        slopes_j = deltay[j, id_nonzero] / deltax[j, id_nonzero]
+        medslope_j = np.median(slopes_j)
+        slopes.append(medslope_j)
+        if method == 'separate':
+            z = y*x[j] - y[j]*x
+            medintercept_j = np.median(z[id_nonzero] / deltax[j, id_nonzero])
+            intercepts.append(medintercept_j)
+
+    medslope = np.median(np.asarray(slopes))
+    if method == "separate":
+        medinter = np.median(np.asarray(intercepts))
+    else:
+        medinter = np.median(y - medslope*x)
+
     return SiegelslopesResult(slope=medslope, intercept=medinter)

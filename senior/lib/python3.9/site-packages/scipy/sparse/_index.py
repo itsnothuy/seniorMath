@@ -1,16 +1,13 @@
-"""Indexing mixin for sparse array/matrix classes.
+"""Indexing mixin for sparse matrix classes.
 """
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 import numpy as np
 from ._sputils import isintlike
 
-if TYPE_CHECKING:
-    import numpy.typing as npt
-
-INT_TYPES = (int, np.integer)
+try:
+    INT_TYPES = (int, long, np.integer)
+except NameError:
+    # long is not defined in Python3
+    INT_TYPES = (int, np.integer)
 
 
 def _broadcast_arrays(a, b):
@@ -40,9 +37,7 @@ class IndexMixin:
 
         Once 1D sparse arrays are implemented, it should be removed.
         """
-        from scipy.sparse import sparray
-
-        if isinstance(self, sparray):
+        if self._is_array:
             raise NotImplementedError(
                 'We have not yet implemented 1D sparse slices; '
                 'please index using explicit indices, e.g. `x[:, [0]]`'
@@ -124,8 +119,8 @@ class IndexMixin:
         if i.shape != j.shape:
             raise IndexError('number of row and column indices differ')
 
-        from ._base import issparse
-        if issparse(x):
+        from ._base import isspmatrix
+        if isspmatrix(x):
             if i.ndim == 1:
                 # Inner indexing, so treat them like row vectors.
                 i = i[None]
@@ -151,28 +146,8 @@ class IndexMixin:
             self._set_arrayXarray(i, j, x)
 
     def _validate_indices(self, key):
-        # First, check if indexing with single boolean matrix.
-        from ._base import _spbase
-        if (isinstance(key, (_spbase, np.ndarray)) and
-                key.ndim == 2 and key.dtype.kind == 'b'):
-            if key.shape != self.shape:
-                raise IndexError('boolean index shape does not match array shape')
-            row, col = key.nonzero()
-        else:
-            row, col = _unpack_index(key)
         M, N = self.shape
-
-        def _validate_bool_idx(
-            idx: npt.NDArray[np.bool_],
-            axis_size: int,
-            axis_name: str
-        ) -> npt.NDArray[np.int_]:
-            if len(idx) != axis_size:
-                raise IndexError(
-                    f"boolean {axis_name} index has incorrect length: {len(idx)} "
-                    f"instead of {axis_size}"
-                )
-            return _boolean_index_to_array(idx)
+        row, col = _unpack_index(key)
 
         if isintlike(row):
             row = int(row)
@@ -180,8 +155,6 @@ class IndexMixin:
                 raise IndexError('row index (%d) out of range' % row)
             if row < 0:
                 row += M
-        elif (bool_row := _compatible_boolean_index(row)) is not None:
-            row = _validate_bool_idx(bool_row, M, "row")
         elif not isinstance(row, slice):
             row = self._asindices(row, M)
 
@@ -191,8 +164,6 @@ class IndexMixin:
                 raise IndexError('column index (%d) out of range' % col)
             if col < 0:
                 col += N
-        elif (bool_col := _compatible_boolean_index(col)) is not None:
-            col = _validate_bool_idx(bool_col, N, "column")
         elif not isinstance(col, slice):
             col = self._asindices(col, N)
 
@@ -228,7 +199,7 @@ class IndexMixin:
             x[x < 0] += length
         return x
 
-    def _getrow(self, i):
+    def getrow(self, i):
         """Return a copy of row i of the matrix, as a (1 x n) row vector.
         """
         M, N = self.shape
@@ -239,7 +210,7 @@ class IndexMixin:
             i += M
         return self._get_intXslice(i, slice(None))
 
-    def _getcol(self, i):
+    def getcol(self, i):
         """Return a copy of column i of the matrix, as a (m x 1) column vector.
         """
         M, N = self.shape
@@ -293,13 +264,16 @@ class IndexMixin:
         self._set_arrayXarray(row, col, x)
 
 
-def _unpack_index(index) -> tuple[
-    int | slice | npt.NDArray[np.bool_ | np.int_],
-    int | slice | npt.NDArray[np.bool_ | np.int_]
-]:
+def _unpack_index(index):
     """ Parse index. Always return a tuple of the form (row, col).
-    Valid type for row/col is integer, slice, array of bool, or array of integers.
+    Valid type for row/col is integer, slice, or array of integers.
     """
+    # First, check if indexing with single boolean matrix.
+    from ._base import spmatrix, isspmatrix
+    if (isinstance(index, (spmatrix, np.ndarray)) and
+            index.ndim == 2 and index.dtype.kind == 'b'):
+        return index.nonzero()
+
     # Parse any ellipses.
     index = _check_ellipsis(index)
 
@@ -316,18 +290,23 @@ def _unpack_index(index) -> tuple[
         if idx is None:
             row, col = index, slice(None)
         elif idx.ndim < 2:
-            return idx, slice(None)
+            return _boolean_index_to_array(idx), slice(None)
         elif idx.ndim == 2:
             return idx.nonzero()
     # Next, check for validity and transform the index as needed.
-    from ._base import issparse
-    if issparse(row) or issparse(col):
+    if isspmatrix(row) or isspmatrix(col):
         # Supporting sparse boolean indexing with both row and col does
         # not work because spmatrix.ndim is always 2.
         raise IndexError(
             'Indexing with sparse matrices is not supported '
             'except boolean indexing where matrix and index '
             'are equal shapes.')
+    bool_row = _compatible_boolean_index(row)
+    bool_col = _compatible_boolean_index(col)
+    if bool_row is not None:
+        row = _boolean_index_to_array(bool_row)
+    if bool_col is not None:
+        col = _boolean_index_to_array(bool_col)
     return row, col
 
 
@@ -339,17 +318,35 @@ def _check_ellipsis(index):
     if not isinstance(index, tuple):
         return index
 
-    # Find any Ellipsis objects.
-    ellipsis_indices = [i for i, v in enumerate(index) if v is Ellipsis]
-    if not ellipsis_indices:
-        return index
-    if len(ellipsis_indices) > 1:
-        raise IndexError("an index can only have a single ellipsis ('...')")
+    # TODO: Deprecate this multiple-ellipsis handling,
+    #       as numpy no longer supports it.
 
-    # Replace the Ellipsis object with 0, 1, or 2 null-slices as needed.
-    i, = ellipsis_indices
-    num_slices = max(0, 3 - len(index))
-    return index[:i] + (slice(None),) * num_slices + index[i + 1:]
+    # Find first ellipsis.
+    for j, v in enumerate(index):
+        if v is Ellipsis:
+            first_ellipsis = j
+            break
+    else:
+        return index
+
+    # Try to expand it using shortcuts for common cases
+    if len(index) == 1:
+        return (slice(None), slice(None))
+    if len(index) == 2:
+        if first_ellipsis == 0:
+            if index[1] is Ellipsis:
+                return (slice(None), slice(None))
+            return (slice(None), index[1])
+        return (index[0], slice(None))
+
+    # Expand it using a general-purpose algorithm
+    tail = []
+    for v in index[first_ellipsis+1:]:
+        if v is not Ellipsis:
+            tail.append(v)
+    nd = first_ellipsis + len(tail)
+    nslice = max(0, 2 - nd)
+    return index[:first_ellipsis] + (slice(None),)*nslice + tuple(tail)
 
 
 def _maybe_bool_ndarray(idx):

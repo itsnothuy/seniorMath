@@ -88,10 +88,8 @@ def test_nnz_overflow():
     assert_allclose(d, [[4]])
 
 
-@pytest.mark.skipif(
-    not (sys.platform.startswith('linux') and np.dtype(np.intp).itemsize >= 8),
-    reason="test requires 64-bit Linux"
-)
+@pytest.mark.skipif(not (sys.platform.startswith('linux') and np.dtype(np.intp).itemsize >= 8),
+                    reason="test requires 64-bit Linux")
 class TestInt32Overflow:
     """
     Some of the sparsetools routines use dense 2D matrices whose
@@ -222,7 +220,7 @@ class TestInt32Overflow:
         finally:
             gc.collect()
 
-    def _check_bsr_matvecs(self, m):  # skip name check
+    def _check_bsr_matvecs(self, m):
         m = m()
         n = self.n
 
@@ -230,7 +228,7 @@ class TestInt32Overflow:
         r = m.dot(np.ones((n, 2), dtype=np.int8))
         assert_equal(r[0, 0], int_to_int8(n))
 
-    def _check_bsr_matvec(self, m):  # skip name check
+    def _check_bsr_matvec(self, m):
         m = m()
         n = self.n
 
@@ -238,7 +236,7 @@ class TestInt32Overflow:
         r = m.dot(np.ones((n,), dtype=np.int8))
         assert_equal(r[0], int_to_int8(n))
 
-    def _check_bsr_diagonal(self, m):  # skip name check
+    def _check_bsr_diagonal(self, m):
         m = m()
         n = self.n
 
@@ -246,17 +244,17 @@ class TestInt32Overflow:
         r = m.diagonal()
         assert_equal(r, np.ones(n))
 
-    def _check_bsr_sort_indices(self, m):  # skip name check
+    def _check_bsr_sort_indices(self, m):
         # _sort_indices
         m = m()
         m.sort_indices()
 
-    def _check_bsr_transpose(self, m):  # skip name check
+    def _check_bsr_transpose(self, m):
         # _transpose
         m = m()
         m.transpose()
 
-    def _check_bsr_matmat(self, m):  # skip name check
+    def _check_bsr_matmat(self, m):
         m = m()
         n = self.n
 
@@ -294,7 +292,7 @@ def test_upcast():
 
     for a_dtype in supported_dtypes:
         for b_dtype in supported_dtypes:
-            msg = f"({a_dtype!r}, {b_dtype!r})"
+            msg = "(%r, %r)" % (a_dtype, b_dtype)
 
             if np.issubdtype(a_dtype, np.complexfloating):
                 a = a0.copy().astype(a_dtype)

@@ -78,7 +78,6 @@ def fft(x, n=None, axis=-1, overwrite_x=False):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fftpack import fft, ifft
     >>> x = np.arange(5)
     >>> np.allclose(fft(ifft(x)), x, atol=1e-15)  # within numerical accuracy.
@@ -326,7 +325,6 @@ def fftn(x, shape=None, axes=None, overwrite_x=False):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fftpack import fftn, ifftn
     >>> y = (-np.arange(16), 8 - np.arange(16), np.arange(16))
     >>> np.allclose(y, fftn(ifftn(y)))
@@ -382,7 +380,6 @@ def fft2(x, shape=None, axes=(-2,-1), overwrite_x=False):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fftpack import fft2, ifft2
     >>> y = np.mgrid[:5, :5][0]
     >>> y
@@ -412,7 +409,6 @@ def ifft2(x, shape=None, axes=(-2,-1), overwrite_x=False):
 
     Examples
     --------
-    >>> import numpy as np
     >>> from scipy.fftpack import fft2, ifft2
     >>> y = np.mgrid[:5, :5][0]
     >>> y
